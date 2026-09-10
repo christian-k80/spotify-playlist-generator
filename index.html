@@ -1,1 +1,81 @@
 
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Spotify Playlist Generator</title>
+
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+    <main class="container">
+
+        <h1>Spotify Playlist Generator</h1>
+
+        <p class="intro">
+            Erstelle eine Spotify-Playlist aus einer Liste von Spotify-Titeln.
+        </p>
+
+        <section class="card">
+
+            <h2>Spotify</h2>
+
+            <p id="login-status">
+                Noch nicht mit Spotify verbunden.
+            </p>
+
+            <button id="login-button">
+                Mit Spotify verbinden
+            </button>
+
+        </section>
+
+        <section class="card">
+
+            <h2>Playlist</h2>
+
+            <label for="playlist-name">
+                Playlist-Name
+            </label>
+
+            <input
+                type="text"
+                id="playlist-name"
+                value="Meine neue Playlist"
+                placeholder="Name der Playlist"
+            >
+
+        </section>
+
+        <section class="card">
+
+            <h2>Spotify Tracks</h2>
+
+            <p class="hint">
+                Füge Spotify-URIs, Spotify-URLs oder Track-IDs ein.
+                Eine Zeile entspricht einem Titel.
+            </p>
+
+            <textarea
+                id="track-input"
+                placeholder="spotify:track:1EpSEIbldNM7SQ6koEQqWT&#10;spotify:track:..."
+            ></textarea>
+
+            <button id="validate-button">
+                Titel prüfen
+            </button>
+
+            <div id="validation-result"></div>
+
+        </section>
+
+    </main>
+
+    <script type="module" src="js/app.js"></script>
+
+</body>
+</html>
