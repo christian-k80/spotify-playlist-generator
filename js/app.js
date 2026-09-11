@@ -11,6 +11,14 @@ const SCOPES = [
     "playlist-modify-private"
 ];
 
+// Anzahl gleichzeitiger Einzel-Requests bei der Titelprüfung.
+// Höher = schneller, aber größeres Risiko für 429 (Rate Limit).
+const VALIDATE_CONCURRENCY = 5;
+
+// Spotify erlaubt maximal 100 Titel pro Anfrage beim Hinzufügen
+// zu einer Playlist.
+const ADD_TRACKS_BATCH_SIZE = 100;
+
 
 // --------------------------------------------------
 // PKCE
@@ -383,6 +391,97 @@ function extractTrackId(input) {
 
 
 // --------------------------------------------------
+// Hilfsfunktionen: Nebenläufigkeit & Rate Limits
+// --------------------------------------------------
+
+// Führt "worker" für jedes Element in "items" aus, aber maximal
+// "limit" Aufrufe gleichzeitig. "onProgress" wird nach jedem
+// abgeschlossenen Element aufgerufen.
+async function runWithConcurrencyLimit(items, limit, worker, onProgress) {
+
+    const results =
+        new Array(items.length);
+
+    let nextIndex = 0;
+    let completed = 0;
+
+    async function runNext() {
+
+        while (nextIndex < items.length) {
+
+            const currentIndex =
+                nextIndex;
+
+            nextIndex += 1;
+
+            results[currentIndex] =
+                await worker(
+                    items[currentIndex],
+                    currentIndex
+                );
+
+            completed += 1;
+
+            if (onProgress) {
+
+                onProgress(
+                    completed,
+                    items.length
+                );
+            }
+        }
+    }
+
+    const workerCount =
+        Math.min(limit, items.length);
+
+    const runners = [];
+
+    for (let i = 0; i < workerCount; i++) {
+
+        runners.push(runNext());
+    }
+
+    await Promise.all(runners);
+
+    return results;
+}
+
+
+// Führt einen fetch-Aufruf aus und wartet bei einer 429-Antwort
+// (Rate Limit) automatisch die von Spotify vorgegebene Zeit ab,
+// bevor es erneut versucht wird.
+async function fetchWithRateLimitRetry(url, options) {
+
+    while (true) {
+
+        const response =
+            await fetch(url, options);
+
+        if (response.status !== 429) {
+
+            return response;
+        }
+
+        const retryAfterHeader =
+            response.headers.get("Retry-After");
+
+        const retryAfterSeconds =
+            retryAfterHeader ?
+                parseInt(retryAfterHeader, 10) :
+                1;
+
+        await new Promise(
+            resolve => setTimeout(
+                resolve,
+                (retryAfterSeconds || 1) * 1000
+            )
+        );
+    }
+}
+
+
+// --------------------------------------------------
 // Spotify Tracks prüfen
 // --------------------------------------------------
 
@@ -431,10 +530,6 @@ async function validateTracks() {
     }
 
 
-    result.textContent =
-        "Titel werden geprüft...";
-
-
     const trackIds = [];
     const invalidEntries = [];
 
@@ -465,23 +560,79 @@ async function validateTracks() {
     }
 
 
+    result.textContent =
+        `Titel werden geprüft... (0 / ${trackIds.length})`;
+
+
+    let sessionExpired = false;
+
+
     try {
 
-        const response =
-            await fetch(
-                `https://api.spotify.com/v1/tracks?ids=${trackIds.join(",")}`,
-                {
-                    method: "GET",
+        const trackResults =
+            await runWithConcurrencyLimit(
+                trackIds,
+                VALIDATE_CONCURRENCY,
 
-                    headers: {
-                        Authorization:
-                            `Bearer ${accessToken}`
+                async (trackId) => {
+
+                    if (sessionExpired) {
+
+                        // Keine weiteren Anfragen mehr senden,
+                        // sobald die Sitzung abgelaufen ist.
+                        return null;
                     }
+
+                    const response =
+                        await fetchWithRateLimitRetry(
+                            `https://api.spotify.com/v1/tracks/${trackId}`,
+                            {
+                                method: "GET",
+
+                                headers: {
+                                    Authorization:
+                                        `Bearer ${accessToken}`
+                                }
+                            }
+                        );
+
+
+                    if (response.status === 401) {
+
+                        sessionExpired = true;
+
+                        return null;
+                    }
+
+
+                    if (response.status === 404) {
+
+                        return { found: false };
+                    }
+
+
+                    if (!response.ok) {
+
+                        throw new Error(
+                            `Spotify API Fehler: ${response.status}`
+                        );
+                    }
+
+
+                    await response.json();
+
+                    return { found: true };
+                },
+
+                (completed, total) => {
+
+                    result.textContent =
+                        `Titel werden geprüft... (${completed} / ${total})`;
                 }
             );
 
 
-        if (response.status === 401) {
+        if (sessionExpired) {
 
             sessionStorage.removeItem(
                 "spotify_access_token"
@@ -496,27 +647,15 @@ async function validateTracks() {
         }
 
 
-        if (!response.ok) {
-
-            throw new Error(
-                `Spotify API Fehler: ${response.status}`
-            );
-        }
-
-
-        const data =
-            await response.json();
-
-
         const validCount =
-            data.tracks.filter(
-                track => track !== null
+            trackResults.filter(
+                track => track && track.found
             ).length;
 
 
         const notFoundCount =
-            data.tracks.filter(
-                track => track === null
+            trackResults.filter(
+                track => track && !track.found
             ).length;
 
 
@@ -636,7 +775,7 @@ async function createPlaylist() {
 
 
     result.textContent =
-        "Playlist wird erstellt...";
+        `Playlist wird erstellt... (0 / ${trackIds.length} Titel hinzugefügt)`;
 
 
     try {
@@ -646,7 +785,7 @@ async function createPlaylist() {
         // ------------------------------------------
 
         const playlistResponse =
-            await fetch(
+            await fetchWithRateLimitRetry(
                 "https://api.spotify.com/v1/me/playlists",
                 {
                     method: "POST",
@@ -692,24 +831,28 @@ async function createPlaylist() {
             );
 
 
-        // Spotify erlaubt maximal 100 Titel
-        // pro Anfrage.
+        let addedCount = 0;
+
+
+        // Spotify erlaubt maximal 100 Titel pro Anfrage. Bei sehr
+        // vielen Titeln werden die Batches nacheinander (nicht
+        // parallel) verschickt, damit kein Rate Limit ausgelöst wird.
 
         for (
             let i = 0;
             i < trackUris.length;
-            i += 100
+            i += ADD_TRACKS_BATCH_SIZE
         ) {
 
             const batch =
                 trackUris.slice(
                     i,
-                    i + 100
+                    i + ADD_TRACKS_BATCH_SIZE
                 );
 
 
             const tracksResponse =
-                await fetch(
+                await fetchWithRateLimitRetry(
                     `https://api.spotify.com/v1/playlists/${playlist.id}/items`,
                     {
                         method: "POST",
@@ -735,6 +878,12 @@ async function createPlaylist() {
                     `Titel konnten nicht hinzugefügt werden (${tracksResponse.status}).`
                 );
             }
+
+
+            addedCount += batch.length;
+
+            result.textContent =
+                `Playlist wird erstellt... (${addedCount} / ${trackUris.length} Titel hinzugefügt)`;
         }
 
 
