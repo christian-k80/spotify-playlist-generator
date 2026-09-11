@@ -13,20 +13,24 @@ const SCOPES = [
 
 
 // --------------------------------------------------
-// Hilfsfunktionen für PKCE
+// PKCE
 // --------------------------------------------------
 
 function generateRandomString(length) {
+
     const characters =
         "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~";
 
     let result = "";
 
     const randomValues = new Uint8Array(length);
+
     crypto.getRandomValues(randomValues);
 
     for (let i = 0; i < length; i++) {
-        result += characters[randomValues[i] % characters.length];
+
+        result +=
+            characters[randomValues[i] % characters.length];
     }
 
     return result;
@@ -35,15 +39,19 @@ function generateRandomString(length) {
 
 async function generateCodeChallenge(codeVerifier) {
 
-    const data = new TextEncoder().encode(codeVerifier);
+    const data =
+        new TextEncoder().encode(codeVerifier);
 
-    const digest = await crypto.subtle.digest(
-        "SHA-256",
-        data
-    );
+    const digest =
+        await crypto.subtle.digest(
+            "SHA-256",
+            data
+        );
 
     return btoa(
-        String.fromCharCode(...new Uint8Array(digest))
+        String.fromCharCode(
+            ...new Uint8Array(digest)
+        )
     )
         .replace(/\+/g, "-")
         .replace(/\//g, "_")
@@ -57,10 +65,13 @@ async function generateCodeChallenge(codeVerifier) {
 
 async function loginWithSpotify() {
 
-    const codeVerifier = generateRandomString(64);
+    const codeVerifier =
+        generateRandomString(64);
 
     const codeChallenge =
-        await generateCodeChallenge(codeVerifier);
+        await generateCodeChallenge(
+            codeVerifier
+        );
 
     sessionStorage.setItem(
         "spotify_code_verifier",
@@ -68,7 +79,9 @@ async function loginWithSpotify() {
     );
 
     const authorizationUrl =
-        new URL("https://accounts.spotify.com/authorize");
+        new URL(
+            "https://accounts.spotify.com/authorize"
+        );
 
     authorizationUrl.searchParams.set(
         "client_id",
@@ -106,7 +119,7 @@ async function loginWithSpotify() {
 
 
 // --------------------------------------------------
-// Spotify Authorization Code gegen Access Token tauschen
+// Code gegen Access Token tauschen
 // --------------------------------------------------
 
 async function exchangeCodeForToken(code) {
@@ -117,6 +130,7 @@ async function exchangeCodeForToken(code) {
         );
 
     if (!codeVerifier) {
+
         throw new Error(
             "PKCE-Code-Verifier wurde nicht gefunden."
         );
@@ -149,7 +163,6 @@ async function exchangeCodeForToken(code) {
         "code_verifier",
         codeVerifier
     );
-
 
     const response =
         await fetch(
@@ -193,7 +206,7 @@ async function exchangeCodeForToken(code) {
 
 
 // --------------------------------------------------
-// URL auf Authorization Code prüfen
+// Rückkehr von Spotify verarbeiten
 // --------------------------------------------------
 
 async function handleAuthorizationCallback() {
@@ -210,7 +223,9 @@ async function handleAuthorizationCallback() {
 
     if (error) {
 
-        document.getElementById("login-status").textContent =
+        document.getElementById(
+            "login-status"
+        ).textContent =
             "Spotify-Anmeldung wurde abgebrochen.";
 
         return;
@@ -224,14 +239,15 @@ async function handleAuthorizationCallback() {
 
     try {
 
-        document.getElementById("login-status").textContent =
+        document.getElementById(
+            "login-status"
+        ).textContent =
             "Spotify-Anmeldung wird abgeschlossen...";
 
 
         await exchangeCodeForToken(code);
 
 
-        // Authorization Code aus der URL entfernen
         window.history.replaceState(
             {},
             document.title,
@@ -245,14 +261,16 @@ async function handleAuthorizationCallback() {
 
         console.error(error);
 
-        document.getElementById("login-status").textContent =
+        document.getElementById(
+            "login-status"
+        ).textContent =
             "Fehler bei der Spotify-Anmeldung.";
     }
 }
 
 
 // --------------------------------------------------
-// Login-Status anzeigen
+// Login-Status
 // --------------------------------------------------
 
 function updateLoginStatus() {
@@ -297,10 +315,78 @@ function updateLoginStatus() {
 
 
 // --------------------------------------------------
-// Titel prüfen – zunächst nur Eingabe erkennen
+// Spotify Track URI erkennen
 // --------------------------------------------------
 
-function validateTracks() {
+function extractTrackId(input) {
+
+    const value =
+        input.trim();
+
+
+    // Spotify URI
+    const uriMatch =
+        value.match(
+            /^spotify:track:([a-zA-Z0-9]+)$/
+        );
+
+
+    if (uriMatch) {
+
+        return uriMatch[1];
+    }
+
+
+    // Spotify URL
+    try {
+
+        const url =
+            new URL(value);
+
+        if (
+            url.hostname === "open.spotify.com"
+        ) {
+
+            const pathParts =
+                url.pathname.split("/");
+
+            const trackIndex =
+                pathParts.indexOf("track");
+
+            if (
+                trackIndex !== -1 &&
+                pathParts[trackIndex + 1]
+            ) {
+
+                return pathParts[
+                    trackIndex + 1
+                ];
+            }
+        }
+
+    } catch {
+        // Keine gültige URL
+    }
+
+
+    // Direkte Track-ID
+    if (
+        /^[a-zA-Z0-9]{22}$/.test(value)
+    ) {
+
+        return value;
+    }
+
+
+    return null;
+}
+
+
+// --------------------------------------------------
+// Spotify Tracks prüfen
+// --------------------------------------------------
+
+async function validateTracks() {
 
     const input =
         document.getElementById(
@@ -330,8 +416,139 @@ function validateTracks() {
     }
 
 
+    const accessToken =
+        sessionStorage.getItem(
+            "spotify_access_token"
+        );
+
+
+    if (!accessToken) {
+
+        result.textContent =
+            "Bitte zuerst mit Spotify verbinden.";
+
+        return;
+    }
+
+
     result.textContent =
-        `${lines.length} Titel erkannt.`;
+        "Titel werden geprüft...";
+
+
+    const trackIds = [];
+    const invalidEntries = [];
+
+
+    for (const line of lines) {
+
+        const trackId =
+            extractTrackId(line);
+
+
+        if (trackId) {
+
+            trackIds.push(trackId);
+
+        } else {
+
+            invalidEntries.push(line);
+        }
+    }
+
+
+    if (trackIds.length === 0) {
+
+        result.textContent =
+            "Keine gültigen Spotify-Track-IDs gefunden.";
+
+        return;
+    }
+
+
+    try {
+
+        const response =
+            await fetch(
+                `https://api.spotify.com/v1/tracks?ids=${trackIds.join(",")}`,
+                {
+                    method: "GET",
+
+                    headers: {
+                        Authorization:
+                            `Bearer ${accessToken}`
+                    }
+                }
+            );
+
+
+        if (response.status === 401) {
+
+            sessionStorage.removeItem(
+                "spotify_access_token"
+            );
+
+            updateLoginStatus();
+
+            result.textContent =
+                "Die Spotify-Sitzung ist abgelaufen. Bitte erneut anmelden.";
+
+            return;
+        }
+
+
+        if (!response.ok) {
+
+            throw new Error(
+                `Spotify API Fehler: ${response.status}`
+            );
+        }
+
+
+        const data =
+            await response.json();
+
+
+        const validCount =
+            data.tracks.filter(
+                track => track !== null
+            ).length;
+
+
+        const notFoundCount =
+            data.tracks.filter(
+                track => track === null
+            ).length;
+
+
+        let message =
+            `${validCount} gültige Titel gefunden.`;
+
+
+        if (notFoundCount > 0) {
+
+            message +=
+                ` ${notFoundCount} Titel wurden nicht gefunden.`;
+        }
+
+
+        if (invalidEntries.length > 0) {
+
+            message +=
+                ` ${invalidEntries.length} Eingabe(n) sind keine gültige Spotify-Track-ID, URI oder URL.`;
+        }
+
+
+        result.textContent =
+            message;
+
+
+    } catch (error) {
+
+        console.error(error);
+
+        result.textContent =
+            "Die Titel konnten nicht bei Spotify geprüft werden.";
+    }
 }
 
 
