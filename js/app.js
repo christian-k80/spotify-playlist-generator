@@ -551,6 +551,227 @@ async function validateTracks() {
     }
 }
 
+// --------------------------------------------------
+// Spotify Playlist erstellen
+// --------------------------------------------------
+
+async function createPlaylist() {
+
+    const accessToken =
+        sessionStorage.getItem(
+            "spotify_access_token"
+        );
+
+    const playlistName =
+        document.getElementById(
+            "playlist-name"
+        ).value.trim();
+
+    const input =
+        document.getElementById(
+            "track-input"
+        ).value;
+
+
+    const result =
+        document.getElementById(
+            "playlist-result"
+        );
+
+
+    if (!accessToken) {
+
+        result.textContent =
+            "Bitte zuerst mit Spotify verbinden.";
+
+        return;
+    }
+
+
+    if (!playlistName) {
+
+        result.textContent =
+            "Bitte einen Playlist-Namen eingeben.";
+
+        return;
+    }
+
+
+    const lines =
+        input
+            .split(/\r?\n/)
+            .map(line => line.trim())
+            .filter(line => line !== "");
+
+
+    if (lines.length === 0) {
+
+        result.textContent =
+            "Bitte mindestens einen Titel eingeben.";
+
+        return;
+    }
+
+
+    const trackIds = [];
+
+    for (const line of lines) {
+
+        const trackId =
+            extractTrackId(line);
+
+        if (trackId) {
+            trackIds.push(trackId);
+        }
+    }
+
+
+    if (trackIds.length === 0) {
+
+        result.textContent =
+            "Es wurden keine gültigen Spotify-Titel gefunden.";
+
+        return;
+    }
+
+
+    result.textContent =
+        "Playlist wird erstellt...";
+
+
+    try {
+
+        // ------------------------------------------
+        // 1. Playlist erstellen
+        // ------------------------------------------
+
+        const playlistResponse =
+            await fetch(
+                "https://api.spotify.com/v1/me/playlists",
+                {
+                    method: "POST",
+
+                    headers: {
+                        Authorization:
+                            `Bearer ${accessToken}`,
+
+                        "Content-Type":
+                            "application/json"
+                    },
+
+                    body: JSON.stringify({
+                        name: playlistName,
+                        public: false,
+                        collaborative: false,
+                        description:
+                            "Erstellt mit dem Spotify Playlist Generator"
+                    })
+                }
+            );
+
+
+        if (!playlistResponse.ok) {
+
+            throw new Error(
+                `Playlist konnte nicht erstellt werden (${playlistResponse.status}).`
+            );
+        }
+
+
+        const playlist =
+            await playlistResponse.json();
+
+
+        // ------------------------------------------
+        // 2. Titel zur Playlist hinzufügen
+        // ------------------------------------------
+
+        const trackUris =
+            trackIds.map(
+                id => `spotify:track:${id}`
+            );
+
+
+        // Spotify erlaubt maximal 100 Titel
+        // pro Anfrage.
+
+        for (
+            let i = 0;
+            i < trackUris.length;
+            i += 100
+        ) {
+
+            const batch =
+                trackUris.slice(
+                    i,
+                    i + 100
+                );
+
+
+            const tracksResponse =
+                await fetch(
+                    `https://api.spotify.com/v1/playlists/${playlist.id}/items`,
+                    {
+                        method: "POST",
+
+                        headers: {
+                            Authorization:
+                                `Bearer ${accessToken}`,
+
+                            "Content-Type":
+                                "application/json"
+                        },
+
+                        body: JSON.stringify({
+                            uris: batch
+                        })
+                    }
+                );
+
+
+            if (!tracksResponse.ok) {
+
+                throw new Error(
+                    `Titel konnten nicht hinzugefügt werden (${tracksResponse.status}).`
+                );
+            }
+        }
+
+
+        // ------------------------------------------
+        // 3. Ergebnis anzeigen
+        // ------------------------------------------
+
+        result.innerHTML = `
+            <p>
+                <strong>Playlist erfolgreich erstellt.</strong>
+            </p>
+
+            <p>
+                ${trackIds.length} Titel wurden hinzugefügt.
+            </p>
+
+            <p>
+                <a
+                    href="${playlist.external_urls.spotify}"
+                    target="_blank"
+                    rel="noopener"
+                >
+                    Playlist in Spotify öffnen
+                </a>
+            </p>
+        `;
+
+
+    } catch (error) {
+
+        console.error(error);
+
+        result.textContent =
+            error.message ||
+            "Die Playlist konnte nicht erstellt werden.";
+    }
+}
 
 // --------------------------------------------------
 // Event-Listener
@@ -571,6 +792,12 @@ document
         validateTracks
     );
 
+document
+    .getElementById("create-playlist-button")
+    .addEventListener(
+        "click",
+        createPlaylist
+    );
 
 // --------------------------------------------------
 // Anwendung starten
