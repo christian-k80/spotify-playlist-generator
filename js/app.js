@@ -13,7 +13,13 @@ const SCOPES = [
 
 // Anzahl gleichzeitiger Einzel-Requests bei der Titelprüfung.
 // Höher = schneller, aber größeres Risiko für 429 (Rate Limit).
-const VALIDATE_CONCURRENCY = 5;
+// Development-Mode-Apps haben ein enges Rate Limit, deshalb hier
+// bewusst niedrig gehalten.
+const VALIDATE_CONCURRENCY = 2;
+
+// Maximale Anzahl an Wiederholungsversuchen bei 429 (Rate Limit),
+// bevor abgebrochen wird.
+const MAX_RATE_LIMIT_RETRIES = 8;
 
 // Spotify erlaubt maximal 100 Titel pro Anfrage beim Hinzufügen
 // zu einer Playlist.
@@ -449,9 +455,15 @@ async function runWithConcurrencyLimit(items, limit, worker, onProgress) {
 
 
 // Führt einen fetch-Aufruf aus und wartet bei einer 429-Antwort
-// (Rate Limit) automatisch die von Spotify vorgegebene Zeit ab,
-// bevor es erneut versucht wird.
-async function fetchWithRateLimitRetry(url, options) {
+// (Rate Limit) automatisch ab, bevor es erneut versucht wird.
+// Wenn Spotify einen "Retry-After"-Header mitschickt, wird genau
+// diese Zeit abgewartet. Andernfalls wird die Wartezeit bei jedem
+// Versuch verdoppelt (exponentielles Backoff), damit sich das
+// Rate Limit nicht durch zu schnelle Wiederholungen aufschaukelt.
+async function fetchWithRateLimitRetry(url, options, onWaiting) {
+
+    let attempt = 0;
+    let backoffSeconds = 1;
 
     while (true) {
 
@@ -463,18 +475,38 @@ async function fetchWithRateLimitRetry(url, options) {
             return response;
         }
 
+        attempt += 1;
+
+        if (attempt > MAX_RATE_LIMIT_RETRIES) {
+
+            throw new Error(
+                "Spotify Rate Limit: zu viele Wiederholungsversuche."
+            );
+        }
+
         const retryAfterHeader =
             response.headers.get("Retry-After");
 
-        const retryAfterSeconds =
+        const waitSeconds =
             retryAfterHeader ?
-                parseInt(retryAfterHeader, 10) :
-                1;
+                parseInt(retryAfterHeader, 10) || 1 :
+                backoffSeconds;
+
+        if (!retryAfterHeader) {
+
+            backoffSeconds =
+                Math.min(backoffSeconds * 2, 30);
+        }
+
+        if (onWaiting) {
+
+            onWaiting(waitSeconds, attempt);
+        }
 
         await new Promise(
             resolve => setTimeout(
                 resolve,
-                (retryAfterSeconds || 1) * 1000
+                waitSeconds * 1000
             )
         );
     }
@@ -593,6 +625,12 @@ async function validateTracks() {
                                     Authorization:
                                         `Bearer ${accessToken}`
                                 }
+                            },
+
+                            (waitSeconds) => {
+
+                                result.textContent =
+                                    `Spotify bremst kurz (Rate Limit) – warte ${waitSeconds}s...`;
                             }
                         );
 
@@ -805,6 +843,12 @@ async function createPlaylist() {
                         description:
                             "Erstellt mit dem Spotify Playlist Generator"
                     })
+                },
+
+                (waitSeconds) => {
+
+                    result.textContent =
+                        `Spotify bremst kurz (Rate Limit) – warte ${waitSeconds}s...`;
                 }
             );
 
@@ -868,6 +912,12 @@ async function createPlaylist() {
                         body: JSON.stringify({
                             uris: batch
                         })
+                    },
+
+                    (waitSeconds) => {
+
+                        result.textContent =
+                            `Spotify bremst kurz (Rate Limit) – warte ${waitSeconds}s...`;
                     }
                 );
 
