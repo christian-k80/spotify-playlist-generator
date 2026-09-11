@@ -1,5 +1,5 @@
 // Spotify Playlist Generator
-// OAuth 2.0 mit PKCE
+// OAuth 2.0 mit PKCE + Refresh-Token + CSRF-Schutz (state)
 
 const CLIENT_ID = "b7a1cad39a6e4ec6b3a82511b6b5e682";
 
@@ -19,6 +19,17 @@ const MAX_RATE_LIMIT_RETRIES = 8;
 // zu einer Playlist.
 const ADD_TRACKS_BATCH_SIZE = 100;
 
+// Nach dieser Zeit ohne Antwort wird eine einzelne Anfrage abgebrochen.
+const FETCH_TIMEOUT_MS = 15000;
+
+// Der Access Token wird schon dieses viele Sekunden VOR dem
+// eigentlichen Ablauf erneuert, damit ein Request nicht mitten in
+// der Ausführung mit 401 fehlschlägt.
+const TOKEN_REFRESH_MARGIN_SECONDS = 60;
+
+// Spotify-übliche Obergrenze für Playlist-Namen in der UI.
+const MAX_PLAYLIST_NAME_LENGTH = 100;
+
 
 // --------------------------------------------------
 // PKCE
@@ -30,15 +41,11 @@ function generateRandomString(length) {
         "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~";
 
     let result = "";
-
     const randomValues = new Uint8Array(length);
-
     crypto.getRandomValues(randomValues);
 
     for (let i = 0; i < length; i++) {
-
-        result +=
-            characters[randomValues[i] % characters.length];
+        result += characters[randomValues[i] % characters.length];
     }
 
     return result;
@@ -47,23 +54,69 @@ function generateRandomString(length) {
 
 async function generateCodeChallenge(codeVerifier) {
 
-    const data =
-        new TextEncoder().encode(codeVerifier);
+    const data = new TextEncoder().encode(codeVerifier);
+    const digest = await crypto.subtle.digest("SHA-256", data);
 
-    const digest =
-        await crypto.subtle.digest(
-            "SHA-256",
-            data
-        );
-
-    return btoa(
-        String.fromCharCode(
-            ...new Uint8Array(digest)
-        )
-    )
+    return btoa(String.fromCharCode(...new Uint8Array(digest)))
         .replace(/\+/g, "-")
         .replace(/\//g, "_")
         .replace(/=+$/, "");
+}
+
+
+// --------------------------------------------------
+// Token-Speicherung
+// --------------------------------------------------
+
+// Speichert Access Token, Refresh Token und den Ablaufzeitpunkt
+// (als Unix-Timestamp in Millisekunden) zentral an einer Stelle,
+// damit nirgendwo sonst direkt mit sessionStorage hantiert wird.
+function storeTokenData(data) {
+
+    sessionStorage.setItem("spotify_access_token", data.access_token);
+
+    if (data.refresh_token) {
+        sessionStorage.setItem("spotify_refresh_token", data.refresh_token);
+    }
+
+    if (data.expires_in) {
+        const expiresAt = Date.now() + data.expires_in * 1000;
+        sessionStorage.setItem("spotify_token_expires_at", String(expiresAt));
+    }
+}
+
+
+function getStoredAccessToken() {
+    return sessionStorage.getItem("spotify_access_token");
+}
+
+
+function getStoredRefreshToken() {
+    return sessionStorage.getItem("spotify_refresh_token");
+}
+
+
+function isAccessTokenExpired() {
+
+    const expiresAt = sessionStorage.getItem("spotify_token_expires_at");
+
+    if (!expiresAt) {
+        // Kein Ablaufzeitpunkt bekannt -> vorsichtshalber als
+        // abgelaufen behandeln, damit ein Refresh versucht wird.
+        return true;
+    }
+
+    return Date.now() > (Number(expiresAt) - TOKEN_REFRESH_MARGIN_SECONDS * 1000);
+}
+
+
+function clearAllAuthData() {
+
+    sessionStorage.removeItem("spotify_access_token");
+    sessionStorage.removeItem("spotify_refresh_token");
+    sessionStorage.removeItem("spotify_token_expires_at");
+    sessionStorage.removeItem("spotify_code_verifier");
+    sessionStorage.removeItem("spotify_oauth_state");
 }
 
 
@@ -73,56 +126,28 @@ async function generateCodeChallenge(codeVerifier) {
 
 async function loginWithSpotify() {
 
-    const codeVerifier =
-        generateRandomString(64);
+    const codeVerifier = generateRandomString(64);
+    const codeChallenge = await generateCodeChallenge(codeVerifier);
 
-    const codeChallenge =
-        await generateCodeChallenge(
-            codeVerifier
-        );
+    // Zufälliger state-Wert schützt vor CSRF / Authorization-Code-
+    // Injection: Wir prüfen beim Rückweg, dass der zurückgegebene
+    // state exakt dem entspricht, den wir selbst erzeugt haben.
+    const state = generateRandomString(16);
 
-    sessionStorage.setItem(
-        "spotify_code_verifier",
-        codeVerifier
-    );
+    sessionStorage.setItem("spotify_code_verifier", codeVerifier);
+    sessionStorage.setItem("spotify_oauth_state", state);
 
-    const authorizationUrl =
-        new URL(
-            "https://accounts.spotify.com/authorize"
-        );
+    const authorizationUrl = new URL("https://accounts.spotify.com/authorize");
 
-    authorizationUrl.searchParams.set(
-        "client_id",
-        CLIENT_ID
-    );
+    authorizationUrl.searchParams.set("client_id", CLIENT_ID);
+    authorizationUrl.searchParams.set("response_type", "code");
+    authorizationUrl.searchParams.set("redirect_uri", REDIRECT_URI);
+    authorizationUrl.searchParams.set("scope", SCOPES.join(" "));
+    authorizationUrl.searchParams.set("state", state);
+    authorizationUrl.searchParams.set("code_challenge_method", "S256");
+    authorizationUrl.searchParams.set("code_challenge", codeChallenge);
 
-    authorizationUrl.searchParams.set(
-        "response_type",
-        "code"
-    );
-
-    authorizationUrl.searchParams.set(
-        "redirect_uri",
-        REDIRECT_URI
-    );
-
-    authorizationUrl.searchParams.set(
-        "scope",
-        SCOPES.join(" ")
-    );
-
-    authorizationUrl.searchParams.set(
-        "code_challenge_method",
-        "S256"
-    );
-
-    authorizationUrl.searchParams.set(
-        "code_challenge",
-        codeChallenge
-    );
-
-    window.location.href =
-        authorizationUrl.toString();
+    window.location.href = authorizationUrl.toString();
 }
 
 
@@ -132,84 +157,110 @@ async function loginWithSpotify() {
 
 async function exchangeCodeForToken(code) {
 
-    const codeVerifier =
-        sessionStorage.getItem(
-            "spotify_code_verifier"
-        );
+    const codeVerifier = sessionStorage.getItem("spotify_code_verifier");
 
     if (!codeVerifier) {
-
-        throw new Error(
-            "PKCE-Code-Verifier wurde nicht gefunden."
-        );
+        throw new Error("PKCE-Code-Verifier wurde nicht gefunden.");
     }
 
-    const body =
-        new URLSearchParams();
+    const body = new URLSearchParams();
 
-    body.append(
-        "client_id",
-        CLIENT_ID
-    );
+    body.append("client_id", CLIENT_ID);
+    body.append("grant_type", "authorization_code");
+    body.append("code", code);
+    body.append("redirect_uri", REDIRECT_URI);
+    body.append("code_verifier", codeVerifier);
 
-    body.append(
-        "grant_type",
-        "authorization_code"
-    );
-
-    body.append(
-        "code",
-        code
-    );
-
-    body.append(
-        "redirect_uri",
-        REDIRECT_URI
-    );
-
-    body.append(
-        "code_verifier",
-        codeVerifier
-    );
-
-    const response =
-        await fetch(
-            "https://accounts.spotify.com/api/token",
-            {
-                method: "POST",
-
-                headers: {
-                    "Content-Type":
-                        "application/x-www-form-urlencoded"
-                },
-
-                body: body.toString()
-            }
-        );
-
+    const response = await fetch("https://accounts.spotify.com/api/token", {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: body.toString()
+    });
 
     if (!response.ok) {
-
-        throw new Error(
-            "Spotify Login konnte nicht abgeschlossen werden."
-        );
+        throw new Error("Spotify Login konnte nicht abgeschlossen werden.");
     }
 
+    const data = await response.json();
 
-    const data =
-        await response.json();
-
-
-    sessionStorage.setItem(
-        "spotify_access_token",
-        data.access_token
-    );
-
-    sessionStorage.removeItem(
-        "spotify_code_verifier"
-    );
+    storeTokenData(data);
+    sessionStorage.removeItem("spotify_code_verifier");
 
     return data;
+}
+
+
+// --------------------------------------------------
+// Access Token per Refresh Token erneuern
+// --------------------------------------------------
+
+// Bei PKCE-Flows liefert Spotify einen Refresh Token, mit dem sich
+// neue Access Tokens ohne erneuten Login und ohne Client Secret
+// anfordern lassen. Gibt bei Erfolg den neuen Access Token zurück,
+// sonst null (z. B. wenn der Refresh Token widerrufen wurde).
+async function refreshAccessToken() {
+
+    const refreshToken = getStoredRefreshToken();
+
+    if (!refreshToken) {
+        return null;
+    }
+
+    const body = new URLSearchParams();
+
+    body.append("client_id", CLIENT_ID);
+    body.append("grant_type", "refresh_token");
+    body.append("refresh_token", refreshToken);
+
+    try {
+
+        const response = await fetch("https://accounts.spotify.com/api/token", {
+            method: "POST",
+            headers: { "Content-Type": "application/x-www-form-urlencoded" },
+            body: body.toString()
+        });
+
+        if (!response.ok) {
+            return null;
+        }
+
+        const data = await response.json();
+
+        storeTokenData(data);
+
+        return data.access_token;
+
+    } catch (error) {
+
+        console.error("Refresh fehlgeschlagen:", error);
+        return null;
+    }
+}
+
+
+// Liefert einen garantiert gültigen Access Token: erneuert ihn
+// proaktiv, falls er abgelaufen oder kurz davor ist. Gibt null
+// zurück, wenn der Nutzer sich erneut anmelden muss.
+async function getValidAccessToken() {
+
+    const accessToken = getStoredAccessToken();
+
+    if (!accessToken) {
+        return null;
+    }
+
+    if (!isAccessTokenExpired()) {
+        return accessToken;
+    }
+
+    const refreshedToken = await refreshAccessToken();
+
+    if (!refreshedToken) {
+        clearAllAuthData();
+        return null;
+    }
+
+    return refreshedToken;
 }
 
 
@@ -219,60 +270,58 @@ async function exchangeCodeForToken(code) {
 
 async function handleAuthorizationCallback() {
 
-    const url =
-        new URL(window.location.href);
-
-    const code =
-        url.searchParams.get("code");
-
-    const error =
-        url.searchParams.get("error");
-
+    const url = new URL(window.location.href);
+    const code = url.searchParams.get("code");
+    const error = url.searchParams.get("error");
+    const returnedState = url.searchParams.get("state");
 
     if (error) {
 
-        document.getElementById(
-            "login-status"
-        ).textContent =
+        document.getElementById("login-status").textContent =
             "Spotify-Anmeldung wurde abgebrochen.";
 
+        clearAllAuthData();
+        window.history.replaceState({}, document.title, REDIRECT_URI);
         return;
     }
-
 
     if (!code) {
         return;
     }
 
+    const expectedState = sessionStorage.getItem("spotify_oauth_state");
+
+    if (!returnedState || returnedState !== expectedState) {
+
+        document.getElementById("login-status").textContent =
+            "Sicherheitsprüfung fehlgeschlagen (state stimmt nicht überein). Bitte erneut anmelden.";
+
+        clearAllAuthData();
+        window.history.replaceState({}, document.title, REDIRECT_URI);
+        return;
+    }
+
+    sessionStorage.removeItem("spotify_oauth_state");
 
     try {
 
-        document.getElementById(
-            "login-status"
-        ).textContent =
+        document.getElementById("login-status").textContent =
             "Spotify-Anmeldung wird abgeschlossen...";
-
 
         await exchangeCodeForToken(code);
 
+        window.history.replaceState({}, document.title, REDIRECT_URI);
 
-        window.history.replaceState(
-            {},
-            document.title,
-            REDIRECT_URI
-        );
-
-
-        updateLoginStatus();
+        await updateLoginStatus();
 
     } catch (error) {
 
         console.error(error);
 
-        document.getElementById(
-            "login-status"
-        ).textContent =
+        document.getElementById("login-status").textContent =
             "Fehler bei der Spotify-Anmeldung.";
+
+        clearAllAuthData();
     }
 }
 
@@ -281,42 +330,23 @@ async function handleAuthorizationCallback() {
 // Login-Status
 // --------------------------------------------------
 
-function updateLoginStatus() {
+async function updateLoginStatus() {
 
-    const token =
-        sessionStorage.getItem(
-            "spotify_access_token"
-        );
+    const status = document.getElementById("login-status");
+    const button = document.getElementById("login-button");
 
-    const status =
-        document.getElementById(
-            "login-status"
-        );
+    const accessToken = await getValidAccessToken();
 
-    const button =
-        document.getElementById(
-            "login-button"
-        );
+    if (accessToken) {
 
-
-    if (token) {
-
-        status.textContent =
-            "Mit Spotify verbunden.";
-
-        button.textContent =
-            "Mit Spotify verbunden";
-
+        status.textContent = "Mit Spotify verbunden.";
+        button.textContent = "Mit Spotify verbunden";
         button.disabled = true;
 
     } else {
 
-        status.textContent =
-            "Noch nicht mit Spotify verbunden.";
-
-        button.textContent =
-            "Mit Spotify verbinden";
-
+        status.textContent = "Noch nicht mit Spotify verbunden.";
+        button.textContent = "Mit Spotify verbinden";
         button.disabled = false;
     }
 }
@@ -328,47 +358,27 @@ function updateLoginStatus() {
 
 function extractTrackId(input) {
 
-    const value =
-        input.trim();
-
+    const value = input.trim();
 
     // Spotify URI
-    const uriMatch =
-        value.match(
-            /^spotify:track:([a-zA-Z0-9]+)$/
-        );
-
+    const uriMatch = value.match(/^spotify:track:([a-zA-Z0-9]+)$/);
 
     if (uriMatch) {
-
         return uriMatch[1];
     }
-
 
     // Spotify URL
     try {
 
-        const url =
-            new URL(value);
+        const url = new URL(value);
 
-        if (
-            url.hostname === "open.spotify.com"
-        ) {
+        if (url.hostname === "open.spotify.com") {
 
-            const pathParts =
-                url.pathname.split("/");
+            const pathParts = url.pathname.split("/");
+            const trackIndex = pathParts.indexOf("track");
 
-            const trackIndex =
-                pathParts.indexOf("track");
-
-            if (
-                trackIndex !== -1 &&
-                pathParts[trackIndex + 1]
-            ) {
-
-                return pathParts[
-                    trackIndex + 1
-                ];
+            if (trackIndex !== -1 && pathParts[trackIndex + 1]) {
+                return pathParts[trackIndex + 1];
             }
         }
 
@@ -376,17 +386,46 @@ function extractTrackId(input) {
         // Keine gültige URL
     }
 
-
     // Direkte Track-ID
-    if (
-        /^[a-zA-Z0-9]{22}$/.test(value)
-    ) {
-
+    if (/^[a-zA-Z0-9]{22}$/.test(value)) {
         return value;
     }
 
-
     return null;
+}
+
+
+// --------------------------------------------------
+// Hilfsfunktion: Fetch mit Timeout
+// --------------------------------------------------
+
+// Bricht eine Anfrage nach FETCH_TIMEOUT_MS automatisch ab, damit
+// die App bei Netzwerkproblemen nicht unbegrenzt hängen bleibt.
+async function fetchWithTimeout(url, options = {}) {
+
+    const controller = new AbortController();
+
+    const timeoutId = setTimeout(
+        () => controller.abort(),
+        FETCH_TIMEOUT_MS
+    );
+
+    try {
+
+        return await fetch(url, { ...options, signal: controller.signal });
+
+    } catch (error) {
+
+        if (error.name === "AbortError") {
+            throw new Error("Zeitüberschreitung: Spotify hat nicht rechtzeitig geantwortet.");
+        }
+
+        throw error;
+
+    } finally {
+
+        clearTimeout(timeoutId);
+    }
 }
 
 
@@ -407,49 +446,107 @@ async function fetchWithRateLimitRetry(url, options, onWaiting) {
 
     while (true) {
 
-        const response =
-            await fetch(url, options);
+        const response = await fetchWithTimeout(url, options);
 
         if (response.status !== 429) {
-
             return response;
         }
 
         attempt += 1;
 
         if (attempt > MAX_RATE_LIMIT_RETRIES) {
-
-            throw new Error(
-                "Spotify Rate Limit: zu viele Wiederholungsversuche."
-            );
+            throw new Error("Spotify Rate Limit: zu viele Wiederholungsversuche.");
         }
 
-        const retryAfterHeader =
-            response.headers.get("Retry-After");
+        const retryAfterHeader = response.headers.get("Retry-After");
 
-        const waitSeconds =
-            retryAfterHeader ?
-                parseInt(retryAfterHeader, 10) || 1 :
-                backoffSeconds;
+        const waitSeconds = retryAfterHeader ?
+            (parseInt(retryAfterHeader, 10) || 1) :
+            backoffSeconds;
 
         if (!retryAfterHeader) {
-
-            backoffSeconds =
-                Math.min(backoffSeconds * 2, 30);
+            backoffSeconds = Math.min(backoffSeconds * 2, 30);
         }
 
         if (onWaiting) {
-
             onWaiting(waitSeconds, attempt);
         }
 
-        await new Promise(
-            resolve => setTimeout(
-                resolve,
-                waitSeconds * 1000
-            )
+        await new Promise(resolve => setTimeout(resolve, waitSeconds * 1000));
+    }
+}
+
+
+// --------------------------------------------------
+// Hilfsfunktion: Authentifizierte Spotify-API-Aufrufe
+// --------------------------------------------------
+
+// Zentrale Stelle für alle authentifizierten Aufrufe der Spotify
+// API: sorgt für einen gültigen Access Token, kombiniert das mit
+// dem Rate-Limit-Retry und versucht bei einer unerwarteten 401
+// (z. B. Token wurde extern widerrufen) einmalig einen Refresh,
+// bevor der Request final fehlschlägt.
+async function fetchSpotifyApi(url, options, onWaiting) {
+
+    const accessToken = await getValidAccessToken();
+
+    if (!accessToken) {
+        throw new Error("Nicht mit Spotify verbunden. Bitte erneut anmelden.");
+    }
+
+    const buildOptions = (token) => ({
+        ...options,
+        headers: {
+            ...(options?.headers || {}),
+            Authorization: `Bearer ${token}`
+        }
+    });
+
+    let response = await fetchWithRateLimitRetry(
+        url,
+        buildOptions(accessToken),
+        onWaiting
+    );
+
+    if (response.status === 401) {
+
+        const refreshedToken = await refreshAccessToken();
+
+        if (!refreshedToken) {
+            clearAllAuthData();
+            throw new Error("Sitzung abgelaufen. Bitte erneut mit Spotify verbinden.");
+        }
+
+        response = await fetchWithRateLimitRetry(
+            url,
+            buildOptions(refreshedToken),
+            onWaiting
         );
     }
+
+    return response;
+}
+
+
+// Liest bei einer Fehlerantwort die Detailmeldung aus dem Spotify-
+// Response-Body aus (falls vorhanden) und baut daraus eine
+// verständliche Fehlermeldung.
+async function buildApiErrorMessage(response, fallbackMessage) {
+
+    try {
+
+        const data = await response.json();
+        const detail = data?.error?.message;
+
+        if (detail) {
+            return `${fallbackMessage} (${response.status}: ${detail})`;
+        }
+
+    } catch {
+        // Body war kein JSON oder leer - Fallback verwenden.
+    }
+
+    return `${fallbackMessage} (${response.status})`;
 }
 
 
@@ -464,73 +561,52 @@ async function fetchWithRateLimitRetry(url, options, onWaiting) {
 // hunderte Einzel-Anfragen und damit das Rate-Limit-Risiko.
 function validateTracks() {
 
-    const input =
-        document.getElementById(
-            "track-input"
-        ).value;
+    const input = document.getElementById("track-input").value;
 
+    const lines = input
+        .split(/\r?\n/)
+        .map(line => line.trim())
+        .filter(line => line !== "");
 
-    const lines =
-        input
-            .split(/\r?\n/)
-            .map(line => line.trim())
-            .filter(line => line !== "");
-
-
-    const result =
-        document.getElementById(
-            "validation-result"
-        );
-
+    const result = document.getElementById("validation-result");
 
     if (lines.length === 0) {
-
-        result.textContent =
-            "Keine Titel eingegeben.";
-
+        result.textContent = "Keine Titel eingegeben.";
         return;
     }
-
 
     const trackIds = [];
     const invalidEntries = [];
 
-
     for (const line of lines) {
 
-        const trackId =
-            extractTrackId(line);
-
+        const trackId = extractTrackId(line);
 
         if (trackId) {
-
             trackIds.push(trackId);
-
         } else {
-
             invalidEntries.push(line);
         }
     }
 
+    const uniqueTrackIds = [...new Set(trackIds)];
+    const duplicateCount = trackIds.length - uniqueTrackIds.length;
 
-    let message =
-        `${trackIds.length} gültig formatierte Titel gefunden.`;
+    let message = `${trackIds.length} gültig formatierte Titel gefunden.`;
 
-
-    if (invalidEntries.length > 0) {
-
-        message +=
-            ` ${invalidEntries.length} Eingabe(n) sind keine gültige Spotify-Track-ID, URI oder URL.`;
+    if (duplicateCount > 0) {
+        message += ` Davon sind ${duplicateCount} Duplikat(e).`;
     }
 
+    if (invalidEntries.length > 0) {
+        message += ` ${invalidEntries.length} Eingabe(n) sind keine gültige Spotify-Track-ID, URI oder URL.`;
+    }
 
-    message +=
-        " Ob die Titel bei Spotify tatsächlich existieren, wird beim Erstellen der Playlist geprüft.";
+    message += " Ob die Titel bei Spotify tatsächlich existieren, wird beim Erstellen der Playlist geprüft.";
 
-
-    result.textContent =
-        message;
+    result.textContent = message;
 }
+
 
 // --------------------------------------------------
 // Spotify Playlist erstellen
@@ -538,87 +614,61 @@ function validateTracks() {
 
 async function createPlaylist() {
 
-    const accessToken =
-        sessionStorage.getItem(
-            "spotify_access_token"
-        );
+    const createButton = document.getElementById("create-playlist-button");
 
-    const playlistName =
-        document.getElementById(
-            "playlist-name"
-        ).value.trim();
-
-    const input =
-        document.getElementById(
-            "track-input"
-        ).value;
-
-
-    const result =
-        document.getElementById(
-            "playlist-result"
-        );
-
-
-    if (!accessToken) {
-
-        result.textContent =
-            "Bitte zuerst mit Spotify verbinden.";
-
+    // Doppelklick-Schutz: verhindert, dass während eines laufenden
+    // Vorgangs versehentlich eine zweite Playlist angelegt wird.
+    if (createButton.disabled) {
         return;
     }
 
+    const playlistName = document.getElementById("playlist-name").value.trim();
+    const input = document.getElementById("track-input").value;
+    const result = document.getElementById("playlist-result");
 
     if (!playlistName) {
-
-        result.textContent =
-            "Bitte einen Playlist-Namen eingeben.";
-
+        result.textContent = "Bitte einen Playlist-Namen eingeben.";
         return;
     }
 
+    if (playlistName.length > MAX_PLAYLIST_NAME_LENGTH) {
+        result.textContent =
+            `Der Playlist-Name ist zu lang (max. ${MAX_PLAYLIST_NAME_LENGTH} Zeichen).`;
+        return;
+    }
 
-    const lines =
-        input
-            .split(/\r?\n/)
-            .map(line => line.trim())
-            .filter(line => line !== "");
-
+    const lines = input
+        .split(/\r?\n/)
+        .map(line => line.trim())
+        .filter(line => line !== "");
 
     if (lines.length === 0) {
-
-        result.textContent =
-            "Bitte mindestens einen Titel eingeben.";
-
+        result.textContent = "Bitte mindestens einen Titel eingeben.";
         return;
     }
 
-
-    const trackIds = [];
+    const rawTrackIds = [];
 
     for (const line of lines) {
-
-        const trackId =
-            extractTrackId(line);
-
+        const trackId = extractTrackId(line);
         if (trackId) {
-            trackIds.push(trackId);
+            rawTrackIds.push(trackId);
         }
     }
 
+    // Duplikate entfernen, damit derselbe Titel nicht mehrfach
+    // hinzugefügt wird.
+    const trackIds = [...new Set(rawTrackIds)];
 
     if (trackIds.length === 0) {
-
-        result.textContent =
-            "Es wurden keine gültigen Spotify-Titel gefunden.";
-
+        result.textContent = "Es wurden keine gültigen Spotify-Titel gefunden.";
         return;
     }
 
+    createButton.disabled = true;
 
     result.textContent =
         `Playlist wird erstellt... (0 / ${trackIds.length} Titel hinzugefügt)`;
-
 
     try {
 
@@ -626,120 +676,72 @@ async function createPlaylist() {
         // 1. Playlist erstellen
         // ------------------------------------------
 
-        const playlistResponse =
-            await fetchWithRateLimitRetry(
-                "https://api.spotify.com/v1/me/playlists",
-                {
-                    method: "POST",
-
-                    headers: {
-                        Authorization:
-                            `Bearer ${accessToken}`,
-
-                        "Content-Type":
-                            "application/json"
-                    },
-
-                    body: JSON.stringify({
-                        name: playlistName,
-                        public: false,
-                        collaborative: false,
-                        description:
-                            "Erstellt mit dem Spotify Playlist Generator"
-                    })
-                },
-
-                (waitSeconds) => {
-
-                    result.textContent =
-                        `Spotify bremst kurz (Rate Limit) – warte ${waitSeconds}s...`;
-                }
-            );
-
+        const playlistResponse = await fetchSpotifyApi(
+            "https://api.spotify.com/v1/me/playlists",
+            {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    name: playlistName,
+                    public: false,
+                    collaborative: false,
+                    description: "Erstellt mit dem Spotify Playlist Generator"
+                })
+            },
+            (waitSeconds) => {
+                result.textContent =
+                    `Spotify bremst kurz (Rate Limit) – warte ${waitSeconds}s...`;
+            }
+        );
 
         if (!playlistResponse.ok) {
-
             throw new Error(
-                `Playlist konnte nicht erstellt werden (${playlistResponse.status}).`
+                await buildApiErrorMessage(playlistResponse, "Playlist konnte nicht erstellt werden")
             );
         }
 
-
-        const playlist =
-            await playlistResponse.json();
-
+        const playlist = await playlistResponse.json();
 
         // ------------------------------------------
         // 2. Titel zur Playlist hinzufügen
         // ------------------------------------------
 
-        const trackUris =
-            trackIds.map(
-                id => `spotify:track:${id}`
-            );
-
+        const trackUris = trackIds.map(id => `spotify:track:${id}`);
 
         let addedCount = 0;
-
 
         // Spotify erlaubt maximal 100 Titel pro Anfrage. Bei sehr
         // vielen Titeln werden die Batches nacheinander (nicht
         // parallel) verschickt, damit kein Rate Limit ausgelöst wird.
 
-        for (
-            let i = 0;
-            i < trackUris.length;
-            i += ADD_TRACKS_BATCH_SIZE
-        ) {
+        for (let i = 0; i < trackUris.length; i += ADD_TRACKS_BATCH_SIZE) {
 
-            const batch =
-                trackUris.slice(
-                    i,
-                    i + ADD_TRACKS_BATCH_SIZE
-                );
+            const batch = trackUris.slice(i, i + ADD_TRACKS_BATCH_SIZE);
 
-
-            const tracksResponse =
-                await fetchWithRateLimitRetry(
-                    `https://api.spotify.com/v1/playlists/${playlist.id}/items`,
-                    {
-                        method: "POST",
-
-                        headers: {
-                            Authorization:
-                                `Bearer ${accessToken}`,
-
-                            "Content-Type":
-                                "application/json"
-                        },
-
-                        body: JSON.stringify({
-                            uris: batch
-                        })
-                    },
-
-                    (waitSeconds) => {
-
-                        result.textContent =
-                            `Spotify bremst kurz (Rate Limit) – warte ${waitSeconds}s...`;
-                    }
-                );
-
+            const tracksResponse = await fetchSpotifyApi(
+                `https://api.spotify.com/v1/playlists/${playlist.id}/items`,
+                {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ uris: batch })
+                },
+                (waitSeconds) => {
+                    result.textContent =
+                        `Spotify bremst kurz (Rate Limit) – warte ${waitSeconds}s...`;
+                }
+            );
 
             if (!tracksResponse.ok) {
-
                 throw new Error(
-                    `Titel konnten nicht hinzugefügt werden (${tracksResponse.status}).`
+                    await buildApiErrorMessage(tracksResponse, "Titel konnten nicht hinzugefügt werden")
                 );
             }
-
 
             addedCount += batch.length;
 
             result.textContent =
                 `Playlist wird erstellt... (${addedCount} / ${trackUris.length} Titel hinzugefügt)`;
         }
-
 
         // ------------------------------------------
         // 3. Tatsächliche Titelanzahl prüfen
@@ -752,30 +754,18 @@ async function createPlaylist() {
 
         let actualTrackCount = null;
 
-        const playlistDetailsResponse =
-            await fetchWithRateLimitRetry(
-                `https://api.spotify.com/v1/playlists/${playlist.id}`,
-                {
-                    method: "GET",
-
-                    headers: {
-                        Authorization:
-                            `Bearer ${accessToken}`
-                    }
-                },
-
-                (waitSeconds) => {
-
-                    result.textContent =
-                        `Spotify bremst kurz (Rate Limit) – warte ${waitSeconds}s...`;
-                }
-            );
-
+        const playlistDetailsResponse = await fetchSpotifyApi(
+            `https://api.spotify.com/v1/playlists/${playlist.id}`,
+            { method: "GET" },
+            (waitSeconds) => {
+                result.textContent =
+                    `Spotify bremst kurz (Rate Limit) – warte ${waitSeconds}s...`;
+            }
+        );
 
         if (playlistDetailsResponse.ok) {
 
-            const playlistDetails =
-                await playlistDetailsResponse.json();
+            const playlistDetails = await playlistDetailsResponse.json();
 
             actualTrackCount =
                 playlistDetails.items?.total ??
@@ -783,13 +773,11 @@ async function createPlaylist() {
                 null;
         }
 
-
         // ------------------------------------------
         // 4. Ergebnis anzeigen
         // ------------------------------------------
 
-        const countMatches =
-            actualTrackCount === trackIds.length;
+        const countMatches = actualTrackCount === trackIds.length;
 
         let statusHtml;
 
@@ -814,8 +802,7 @@ async function createPlaylist() {
 
         } else {
 
-            const missingCount =
-                trackIds.length - actualTrackCount;
+            const missingCount = trackIds.length - actualTrackCount;
 
             statusHtml = `
                 <p>
@@ -846,16 +833,23 @@ async function createPlaylist() {
             </p>
         `;
 
-
     } catch (error) {
 
         console.error(error);
 
         result.textContent =
-            error.message ||
-            "Die Playlist konnte nicht erstellt werden.";
+            error.message || "Die Playlist konnte nicht erstellt werden.";
+
+        // Wenn die Sitzung abgelaufen ist, Login-Status aktualisieren,
+        // damit der "Mit Spotify verbinden"-Button wieder erscheint.
+        await updateLoginStatus();
+
+    } finally {
+
+        createButton.disabled = false;
     }
 }
+
 
 // --------------------------------------------------
 // Event-Listener
@@ -863,25 +857,15 @@ async function createPlaylist() {
 
 document
     .getElementById("login-button")
-    .addEventListener(
-        "click",
-        loginWithSpotify
-    );
-
+    .addEventListener("click", loginWithSpotify);
 
 document
     .getElementById("validate-button")
-    .addEventListener(
-        "click",
-        validateTracks
-    );
+    .addEventListener("click", validateTracks);
 
 document
     .getElementById("create-playlist-button")
-    .addEventListener(
-        "click",
-        createPlaylist
-    );
+    .addEventListener("click", createPlaylist);
 
 // --------------------------------------------------
 // Anwendung starten
