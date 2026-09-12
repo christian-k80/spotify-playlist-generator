@@ -81,6 +81,11 @@ button:active {
     transform: scale(0.99);
 }
 
+button:disabled {
+    background: #b3e6c8;
+    cursor: not-allowed;
+}
+
 .hint {
     color: #666;
     font-size: 15px;
@@ -98,6 +103,130 @@ button:active {
     line-height: 1.6;
 }
 
+
+/* --------------------------------------------------
+   Drag & Drop-Zone für TXT-Dateien
+   -------------------------------------------------- */
+
+.drop-zone {
+    border: 2px dashed #ccc;
+    border-radius: 14px;
+    padding: 32px 16px;
+    text-align: center;
+    cursor: pointer;
+    margin-bottom: 16px;
+    background: #fafafa;
+    transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.drop-zone p {
+    margin: 0;
+    color: #666;
+    font-size: 16px;
+    line-height: 1.5;
+}
+
+.drop-zone:hover {
+    border-color: #1db954;
+}
+
+.drop-zone:focus-visible {
+    outline: 2px solid #1db954;
+    outline-offset: 2px;
+}
+
+.drop-zone--active {
+    border-color: #1db954;
+    background: rgba(29, 185, 84, 0.08);
+}
+
+
+/* --------------------------------------------------
+   Warteschlange der hochgeladenen Dateien
+   -------------------------------------------------- */
+
+.file-queue-list {
+    list-style: none;
+    padding: 0;
+    margin: 0 0 16px 0;
+}
+
+.file-queue-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 8px 16px;
+    padding: 12px 0;
+    border-bottom: 1px solid #eee;
+    font-size: 15px;
+}
+
+.file-queue-item:last-child {
+    border-bottom: none;
+}
+
+.file-queue-item__name {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+.file-queue-item__status {
+    color: #666;
+    font-size: 14px;
+    white-space: nowrap;
+}
+
+.file-queue-item--error .file-queue-item__status {
+    color: #d92d20;
+    white-space: normal;
+}
+
+.file-queue-item--done .file-queue-item__status {
+    color: #1db954;
+}
+
+.file-queue-item__remove,
+.file-queue-item__link {
+    width: auto;
+    min-height: auto;
+    padding: 6px 12px;
+    border-radius: 10px;
+    font-size: 14px;
+    font-weight: 600;
+}
+
+.file-queue-item__remove {
+    background: #f2f2f2;
+    color: #1d1d1f;
+    border: 1px solid #ddd;
+    cursor: pointer;
+}
+
+.file-queue-item__remove:hover {
+    background: #e8e8e8;
+}
+
+.file-queue-item__link {
+    background: none;
+    color: #1db954;
+    text-decoration: none;
+    padding: 6px 4px;
+}
+
+.file-queue-item__link:hover {
+    text-decoration: underline;
+}
+
+#file-playlist-results {
+    margin-top: 12px;
+    font-size: 15px;
+    color: #666;
+    line-height: 1.5;
+}
+
+
 @media (max-width: 600px) {
 
     .container {
@@ -111,6 +240,15 @@ button:active {
     .card {
         padding: 20px;
         border-radius: 16px;
+    }
+
+    .drop-zone {
+        padding: 24px 12px;
+    }
+
+    .file-queue-item {
+        flex-direction: column;
+        align-items: flex-start;
     }
 
 }
