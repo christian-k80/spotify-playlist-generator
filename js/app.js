@@ -1,5 +1,6 @@
 // Spotify Playlist Generator
 // OAuth 2.0 mit PKCE + Refresh-Token + CSRF-Schutz (state)
+// + Playlist-Erstellung aus TXT-Dateien per Drag & Drop
 
 const CLIENT_ID = "b7a1cad39a6e4ec6b3a82511b6b5e682";
 
@@ -68,9 +69,6 @@ async function generateCodeChallenge(codeVerifier) {
 // Token-Speicherung
 // --------------------------------------------------
 
-// Speichert Access Token, Refresh Token und den Ablaufzeitpunkt
-// (als Unix-Timestamp in Millisekunden) zentral an einer Stelle,
-// damit nirgendwo sonst direkt mit sessionStorage hantiert wird.
 function storeTokenData(data) {
 
     sessionStorage.setItem("spotify_access_token", data.access_token);
@@ -101,8 +99,6 @@ function isAccessTokenExpired() {
     const expiresAt = sessionStorage.getItem("spotify_token_expires_at");
 
     if (!expiresAt) {
-        // Kein Ablaufzeitpunkt bekannt -> vorsichtshalber als
-        // abgelaufen behandeln, damit ein Refresh versucht wird.
         return true;
     }
 
@@ -128,10 +124,6 @@ async function loginWithSpotify() {
 
     const codeVerifier = generateRandomString(64);
     const codeChallenge = await generateCodeChallenge(codeVerifier);
-
-    // Zufälliger state-Wert schützt vor CSRF / Authorization-Code-
-    // Injection: Wir prüfen beim Rückweg, dass der zurückgegebene
-    // state exakt dem entspricht, den wir selbst erzeugt haben.
     const state = generateRandomString(16);
 
     sessionStorage.setItem("spotify_code_verifier", codeVerifier);
@@ -194,10 +186,6 @@ async function exchangeCodeForToken(code) {
 // Access Token per Refresh Token erneuern
 // --------------------------------------------------
 
-// Bei PKCE-Flows liefert Spotify einen Refresh Token, mit dem sich
-// neue Access Tokens ohne erneuten Login und ohne Client Secret
-// anfordern lassen. Gibt bei Erfolg den neuen Access Token zurück,
-// sonst null (z. B. wenn der Refresh Token widerrufen wurde).
 async function refreshAccessToken() {
 
     const refreshToken = getStoredRefreshToken();
@@ -238,9 +226,6 @@ async function refreshAccessToken() {
 }
 
 
-// Liefert einen garantiert gültigen Access Token: erneuert ihn
-// proaktiv, falls er abgelaufen oder kurz davor ist. Gibt null
-// zurück, wenn der Nutzer sich erneut anmelden muss.
 async function getValidAccessToken() {
 
     const accessToken = getStoredAccessToken();
@@ -360,14 +345,12 @@ function extractTrackId(input) {
 
     const value = input.trim();
 
-    // Spotify URI
     const uriMatch = value.match(/^spotify:track:([a-zA-Z0-9]+)$/);
 
     if (uriMatch) {
         return uriMatch[1];
     }
 
-    // Spotify URL
     try {
 
         const url = new URL(value);
@@ -386,7 +369,6 @@ function extractTrackId(input) {
         // Keine gültige URL
     }
 
-    // Direkte Track-ID
     if (/^[a-zA-Z0-9]{22}$/.test(value)) {
         return value;
     }
@@ -396,11 +378,44 @@ function extractTrackId(input) {
 
 
 // --------------------------------------------------
+// Track-Zeilen parsen (für Textfeld UND für Dateien)
+// --------------------------------------------------
+
+// Zerlegt einen mehrzeiligen Text in gültige Track-IDs (dedupliziert)
+// und ungültige Zeilen. Wird sowohl von der manuellen Texteingabe
+// als auch beim Einlesen von TXT-Dateien verwendet.
+function parseTrackLines(text) {
+
+    const lines = text
+        .split(/\r?\n/)
+        .map(line => line.trim())
+        .filter(line => line !== "");
+
+    const rawTrackIds = [];
+    const invalidEntries = [];
+
+    for (const line of lines) {
+
+        const trackId = extractTrackId(line);
+
+        if (trackId) {
+            rawTrackIds.push(trackId);
+        } else {
+            invalidEntries.push(line);
+        }
+    }
+
+    const trackIds = [...new Set(rawTrackIds)];
+    const duplicateCount = rawTrackIds.length - trackIds.length;
+
+    return { trackIds, invalidEntries, duplicateCount };
+}
+
+
+// --------------------------------------------------
 // Hilfsfunktion: Fetch mit Timeout
 // --------------------------------------------------
 
-// Bricht eine Anfrage nach FETCH_TIMEOUT_MS automatisch ab, damit
-// die App bei Netzwerkproblemen nicht unbegrenzt hängen bleibt.
 async function fetchWithTimeout(url, options = {}) {
 
     const controller = new AbortController();
@@ -433,12 +448,6 @@ async function fetchWithTimeout(url, options = {}) {
 // Hilfsfunktion: Rate Limits
 // --------------------------------------------------
 
-// Führt einen fetch-Aufruf aus und wartet bei einer 429-Antwort
-// (Rate Limit) automatisch ab, bevor es erneut versucht wird.
-// Wenn Spotify einen "Retry-After"-Header mitschickt, wird genau
-// diese Zeit abgewartet. Andernfalls wird die Wartezeit bei jedem
-// Versuch verdoppelt (exponentielles Backoff), damit sich das
-// Rate Limit nicht durch zu schnelle Wiederholungen aufschaukelt.
 async function fetchWithRateLimitRetry(url, options, onWaiting) {
 
     let attempt = 0;
@@ -481,11 +490,6 @@ async function fetchWithRateLimitRetry(url, options, onWaiting) {
 // Hilfsfunktion: Authentifizierte Spotify-API-Aufrufe
 // --------------------------------------------------
 
-// Zentrale Stelle für alle authentifizierten Aufrufe der Spotify
-// API: sorgt für einen gültigen Access Token, kombiniert das mit
-// dem Rate-Limit-Retry und versucht bei einer unerwarteten 401
-// (z. B. Token wurde extern widerrufen) einmalig einen Refresh,
-// bevor der Request final fehlschlägt.
 async function fetchSpotifyApi(url, options, onWaiting) {
 
     const accessToken = await getValidAccessToken();
@@ -528,9 +532,6 @@ async function fetchSpotifyApi(url, options, onWaiting) {
 }
 
 
-// Liest bei einer Fehlerantwort die Detailmeldung aus dem Spotify-
-// Response-Body aus (falls vorhanden) und baut daraus eine
-// verständliche Fehlermeldung.
 async function buildApiErrorMessage(response, fallbackMessage) {
 
     try {
@@ -554,45 +555,19 @@ async function buildApiErrorMessage(response, fallbackMessage) {
 // Titel-Eingabe lokal prüfen (ohne Spotify-Anfrage)
 // --------------------------------------------------
 
-// Prüft nur das Format der eingegebenen Zeilen (gültige Spotify-
-// Track-ID, -URI oder -URL?). Ob die Titel tatsächlich bei Spotify
-// existieren, wird erst beim Erstellen der Playlist über den
-// Titel-Abgleich (siehe createPlaylist) festgestellt - das erspart
-// hunderte Einzel-Anfragen und damit das Rate-Limit-Risiko.
 function validateTracks() {
 
     const input = document.getElementById("track-input").value;
-
-    const lines = input
-        .split(/\r?\n/)
-        .map(line => line.trim())
-        .filter(line => line !== "");
-
     const result = document.getElementById("validation-result");
 
-    if (lines.length === 0) {
+    if (input.trim() === "") {
         result.textContent = "Keine Titel eingegeben.";
         return;
     }
 
-    const trackIds = [];
-    const invalidEntries = [];
+    const { trackIds, invalidEntries, duplicateCount } = parseTrackLines(input);
 
-    for (const line of lines) {
-
-        const trackId = extractTrackId(line);
-
-        if (trackId) {
-            trackIds.push(trackId);
-        } else {
-            invalidEntries.push(line);
-        }
-    }
-
-    const uniqueTrackIds = [...new Set(trackIds)];
-    const duplicateCount = trackIds.length - uniqueTrackIds.length;
-
-    let message = `${trackIds.length} gültig formatierte Titel gefunden.`;
+    let message = `${trackIds.length + duplicateCount} gültig formatierte Titel gefunden.`;
 
     if (duplicateCount > 0) {
         message += ` Davon sind ${duplicateCount} Duplikat(e).`;
@@ -609,15 +584,121 @@ function validateTracks() {
 
 
 // --------------------------------------------------
-// Spotify Playlist erstellen
+// Kernfunktion: Eine Playlist aus Track-IDs erstellen
+// --------------------------------------------------
+
+// Erstellt eine Playlist mit dem angegebenen Namen und fügt die
+// übergebenen Track-IDs hinzu. onStatus(text) wird für laufende
+// Fortschritts-/Warteinformationen aufgerufen (z. B. Rate-Limit-
+// Wartezeiten). Wird sowohl von der manuellen Eingabe als auch vom
+// Datei-Batch verwendet, damit die Kernlogik nur an einer Stelle
+// gepflegt werden muss.
+async function createPlaylistFromTracks(playlistName, trackIds, onStatus) {
+
+    const notify = (text) => {
+        if (onStatus) onStatus(text);
+    };
+
+    // ------------------------------------------
+    // 1. Playlist erstellen
+    // ------------------------------------------
+
+    notify(`Playlist "${playlistName}" wird erstellt... (0 / ${trackIds.length} Titel hinzugefügt)`);
+
+    const playlistResponse = await fetchSpotifyApi(
+        "https://api.spotify.com/v1/me/playlists",
+        {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                name: playlistName,
+                public: false,
+                collaborative: false,
+                description: "Erstellt mit dem Spotify Playlist Generator"
+            })
+        },
+        (waitSeconds) => notify(`Spotify bremst kurz (Rate Limit) – warte ${waitSeconds}s...`)
+    );
+
+    if (!playlistResponse.ok) {
+        throw new Error(
+            await buildApiErrorMessage(playlistResponse, "Playlist konnte nicht erstellt werden")
+        );
+    }
+
+    const playlist = await playlistResponse.json();
+
+    // ------------------------------------------
+    // 2. Titel zur Playlist hinzufügen
+    // ------------------------------------------
+
+    const trackUris = trackIds.map(id => `spotify:track:${id}`);
+
+    let addedCount = 0;
+
+    for (let i = 0; i < trackUris.length; i += ADD_TRACKS_BATCH_SIZE) {
+
+        const batch = trackUris.slice(i, i + ADD_TRACKS_BATCH_SIZE);
+
+        const tracksResponse = await fetchSpotifyApi(
+            `https://api.spotify.com/v1/playlists/${playlist.id}/items`,
+            {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ uris: batch })
+            },
+            (waitSeconds) => notify(`Spotify bremst kurz (Rate Limit) – warte ${waitSeconds}s...`)
+        );
+
+        if (!tracksResponse.ok) {
+            throw new Error(
+                await buildApiErrorMessage(tracksResponse, "Titel konnten nicht hinzugefügt werden")
+            );
+        }
+
+        addedCount += batch.length;
+
+        notify(`Playlist "${playlistName}" wird erstellt... (${addedCount} / ${trackUris.length} Titel hinzugefügt)`);
+    }
+
+    // ------------------------------------------
+    // 3. Tatsächliche Titelanzahl prüfen
+    // ------------------------------------------
+
+    let actualTrackCount = null;
+
+    const playlistDetailsResponse = await fetchSpotifyApi(
+        `https://api.spotify.com/v1/playlists/${playlist.id}`,
+        { method: "GET" },
+        (waitSeconds) => notify(`Spotify bremst kurz (Rate Limit) – warte ${waitSeconds}s...`)
+    );
+
+    if (playlistDetailsResponse.ok) {
+
+        const playlistDetails = await playlistDetailsResponse.json();
+
+        actualTrackCount =
+            playlistDetails.items?.total ??
+            playlistDetails.tracks?.total ??
+            null;
+    }
+
+    return {
+        playlist,
+        requestedCount: trackIds.length,
+        actualTrackCount
+    };
+}
+
+
+// --------------------------------------------------
+// Manuelle Playlist-Erstellung (Textfeld)
 // --------------------------------------------------
 
 async function createPlaylist() {
 
     const createButton = document.getElementById("create-playlist-button");
 
-    // Doppelklick-Schutz: verhindert, dass während eines laufenden
-    // Vorgangs versehentlich eine zweite Playlist angelegt wird.
     if (createButton.disabled) {
         return;
     }
@@ -637,28 +718,7 @@ async function createPlaylist() {
         return;
     }
 
-    const lines = input
-        .split(/\r?\n/)
-        .map(line => line.trim())
-        .filter(line => line !== "");
-
-    if (lines.length === 0) {
-        result.textContent = "Bitte mindestens einen Titel eingeben.";
-        return;
-    }
-
-    const rawTrackIds = [];
-
-    for (const line of lines) {
-        const trackId = extractTrackId(line);
-        if (trackId) {
-            rawTrackIds.push(trackId);
-        }
-    }
-
-    // Duplikate entfernen, damit derselbe Titel nicht mehrfach
-    // hinzugefügt wird.
-    const trackIds = [...new Set(rawTrackIds)];
+    const { trackIds } = parseTrackLines(input);
 
     if (trackIds.length === 0) {
         result.textContent = "Es wurden keine gültigen Spotify-Titel gefunden.";
@@ -667,171 +727,16 @@ async function createPlaylist() {
 
     createButton.disabled = true;
 
-    result.textContent =
-        `Playlist wird erstellt... (0 / ${trackIds.length} Titel hinzugefügt)`;
-
     try {
 
-        // ------------------------------------------
-        // 1. Playlist erstellen
-        // ------------------------------------------
-
-        const playlistResponse = await fetchSpotifyApi(
-            "https://api.spotify.com/v1/me/playlists",
-            {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    name: playlistName,
-                    public: false,
-                    collaborative: false,
-                    description: "Erstellt mit dem Spotify Playlist Generator"
-                })
-            },
-            (waitSeconds) => {
-                result.textContent =
-                    `Spotify bremst kurz (Rate Limit) – warte ${waitSeconds}s...`;
-            }
-        );
-
-        if (!playlistResponse.ok) {
-            throw new Error(
-                await buildApiErrorMessage(playlistResponse, "Playlist konnte nicht erstellt werden")
-            );
-        }
-
-        const playlist = await playlistResponse.json();
-
-        // ------------------------------------------
-        // 2. Titel zur Playlist hinzufügen
-        // ------------------------------------------
-
-        const trackUris = trackIds.map(id => `spotify:track:${id}`);
-
-        let addedCount = 0;
-
-        // Spotify erlaubt maximal 100 Titel pro Anfrage. Bei sehr
-        // vielen Titeln werden die Batches nacheinander (nicht
-        // parallel) verschickt, damit kein Rate Limit ausgelöst wird.
-
-        for (let i = 0; i < trackUris.length; i += ADD_TRACKS_BATCH_SIZE) {
-
-            const batch = trackUris.slice(i, i + ADD_TRACKS_BATCH_SIZE);
-
-            const tracksResponse = await fetchSpotifyApi(
-                `https://api.spotify.com/v1/playlists/${playlist.id}/items`,
-                {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ uris: batch })
-                },
-                (waitSeconds) => {
-                    result.textContent =
-                        `Spotify bremst kurz (Rate Limit) – warte ${waitSeconds}s...`;
-                }
+        const { playlist, requestedCount, actualTrackCount } =
+            await createPlaylistFromTracks(
+                playlistName,
+                trackIds,
+                (text) => { result.textContent = text; }
             );
 
-            if (!tracksResponse.ok) {
-                throw new Error(
-                    await buildApiErrorMessage(tracksResponse, "Titel konnten nicht hinzugefügt werden")
-                );
-            }
-
-            addedCount += batch.length;
-
-            result.textContent =
-                `Playlist wird erstellt... (${addedCount} / ${trackUris.length} Titel hinzugefügt)`;
-        }
-
-        // ------------------------------------------
-        // 3. Tatsächliche Titelanzahl prüfen
-        // ------------------------------------------
-
-        // Vergleicht, wie viele Titel die Playlist laut Spotify
-        // jetzt wirklich enthält, mit der Anzahl der übergebenen
-        // Track-IDs. Eine Abweichung bedeutet z. B., dass einzelne
-        // Titel-IDs bei Spotify nicht (mehr) existieren.
-
-        let actualTrackCount = null;
-
-        const playlistDetailsResponse = await fetchSpotifyApi(
-            `https://api.spotify.com/v1/playlists/${playlist.id}`,
-            { method: "GET" },
-            (waitSeconds) => {
-                result.textContent =
-                    `Spotify bremst kurz (Rate Limit) – warte ${waitSeconds}s...`;
-            }
-        );
-
-        if (playlistDetailsResponse.ok) {
-
-            const playlistDetails = await playlistDetailsResponse.json();
-
-            actualTrackCount =
-                playlistDetails.items?.total ??
-                playlistDetails.tracks?.total ??
-                null;
-        }
-
-        // ------------------------------------------
-        // 4. Ergebnis anzeigen
-        // ------------------------------------------
-
-        const countMatches = actualTrackCount === trackIds.length;
-
-        let statusHtml;
-
-        if (actualTrackCount === null) {
-
-            statusHtml = `
-                <p>
-                    ${trackIds.length} Titel wurden übermittelt. Die
-                    tatsächliche Anzahl in der Playlist konnte nicht
-                    abgerufen werden - bitte in Spotify kontrollieren.
-                </p>
-            `;
-
-        } else if (countMatches) {
-
-            statusHtml = `
-                <p>
-                    Alle ${actualTrackCount} Titel wurden erfolgreich
-                    hinzugefügt.
-                </p>
-            `;
-
-        } else {
-
-            const missingCount = trackIds.length - actualTrackCount;
-
-            statusHtml = `
-                <p>
-                    Die Playlist enthält ${actualTrackCount} von
-                    ${trackIds.length} übermittelten Titeln.
-                    ${missingCount} Titel konnten nicht hinzugefügt
-                    werden (z. B. weil die Track-ID bei Spotify nicht
-                    existiert).
-                </p>
-            `;
-        }
-
-        result.innerHTML = `
-            <p>
-                <strong>Playlist erfolgreich erstellt.</strong>
-            </p>
-
-            ${statusHtml}
-
-            <p>
-                <a
-                    href="${playlist.external_urls.spotify}"
-                    target="_blank"
-                    rel="noopener"
-                >
-                    Playlist in Spotify öffnen
-                </a>
-            </p>
-        `;
+        result.innerHTML = buildPlaylistResultHtml(playlist, requestedCount, actualTrackCount);
 
     } catch (error) {
 
@@ -840,14 +745,341 @@ async function createPlaylist() {
         result.textContent =
             error.message || "Die Playlist konnte nicht erstellt werden.";
 
-        // Wenn die Sitzung abgelaufen ist, Login-Status aktualisieren,
-        // damit der "Mit Spotify verbinden"-Button wieder erscheint.
         await updateLoginStatus();
 
     } finally {
 
         createButton.disabled = false;
     }
+}
+
+
+// Baut die ausführliche Erfolgs-/Abweichungs-Meldung inkl. Link
+// zur Playlist (identisch zur bisherigen Darstellung).
+function buildPlaylistResultHtml(playlist, requestedCount, actualTrackCount) {
+
+    const countMatches = actualTrackCount === requestedCount;
+
+    let statusHtml;
+
+    if (actualTrackCount === null) {
+
+        statusHtml = `
+            <p>
+                ${requestedCount} Titel wurden übermittelt. Die
+                tatsächliche Anzahl in der Playlist konnte nicht
+                abgerufen werden - bitte in Spotify kontrollieren.
+            </p>
+        `;
+
+    } else if (countMatches) {
+
+        statusHtml = `
+            <p>
+                Alle ${actualTrackCount} Titel wurden erfolgreich
+                hinzugefügt.
+            </p>
+        `;
+
+    } else {
+
+        const missingCount = requestedCount - actualTrackCount;
+
+        statusHtml = `
+            <p>
+                Die Playlist enthält ${actualTrackCount} von
+                ${requestedCount} übermittelten Titeln.
+                ${missingCount} Titel konnten nicht hinzugefügt
+                werden (z. B. weil die Track-ID bei Spotify nicht
+                existiert).
+            </p>
+        `;
+    }
+
+    return `
+        <p>
+            <strong>Playlist "${playlist.name}" erfolgreich erstellt.</strong>
+        </p>
+
+        ${statusHtml}
+
+        <p>
+            <a
+                href="${playlist.external_urls.spotify}"
+                target="_blank"
+                rel="noopener"
+            >
+                Playlist in Spotify öffnen
+            </a>
+        </p>
+    `;
+}
+
+
+// --------------------------------------------------
+// Playlist-Erstellung aus TXT-Dateien (Drag & Drop)
+// --------------------------------------------------
+
+// fileQueue enthält ein Objekt pro Datei, solange sie noch nicht
+// (oder gerade) verarbeitet wurde:
+// { id, fileName, playlistName, trackIds, invalidCount, status, resultHtml }
+let fileQueue = [];
+
+function generateQueueId() {
+    return (crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`);
+}
+
+
+// Leitet aus einem Dateinamen den Playlist-Namen ab: Endung ".txt"
+// entfernen, trimmen, auf die Spotify-übliche Maximallänge kürzen.
+function derivePlaylistNameFromFileName(fileName) {
+
+    const withoutExtension = fileName.replace(/\.txt$/i, "").trim();
+    const fallbackName = withoutExtension || "Playlist";
+
+    return fallbackName.length > MAX_PLAYLIST_NAME_LENGTH ?
+        fallbackName.slice(0, MAX_PLAYLIST_NAME_LENGTH) :
+        fallbackName;
+}
+
+
+async function addFilesToQueue(fileList) {
+
+    const files = Array.from(fileList);
+
+    const txtFiles = files.filter(
+        file => file.name.toLowerCase().endsWith(".txt")
+    );
+
+    const skippedCount = files.length - txtFiles.length;
+
+    for (const file of txtFiles) {
+
+        let content = "";
+
+        try {
+            content = await file.text();
+        } catch (error) {
+            console.error(`Datei "${file.name}" konnte nicht gelesen werden:`, error);
+            continue;
+        }
+
+        const { trackIds, invalidEntries } = parseTrackLines(content);
+
+        fileQueue.push({
+            id: generateQueueId(),
+            fileName: file.name,
+            playlistName: derivePlaylistNameFromFileName(file.name),
+            trackIds,
+            invalidCount: invalidEntries.length,
+            status: "pending" // pending | creating | done | error
+        });
+    }
+
+    renderFileQueue(skippedCount);
+}
+
+
+function removeFileFromQueue(id) {
+
+    fileQueue = fileQueue.filter(entry => entry.id !== id);
+    renderFileQueue();
+}
+
+
+function renderFileQueue(skippedCount = 0) {
+
+    const listElement = document.getElementById("file-queue-list");
+    const createFilesButton = document.getElementById("create-playlists-from-files-button");
+
+    listElement.innerHTML = "";
+
+    for (const entry of fileQueue) {
+
+        const item = document.createElement("li");
+        item.className = `file-queue-item file-queue-item--${entry.status}`;
+
+        let statusText;
+
+        if (entry.status === "pending") {
+            statusText = `${entry.trackIds.length} gültige Titel` +
+                (entry.invalidCount > 0 ? `, ${entry.invalidCount} ungültig` : "");
+        } else if (entry.status === "creating") {
+            statusText = entry.progressText || "wird erstellt...";
+        } else if (entry.status === "done") {
+            statusText = "✅ Playlist erstellt";
+        } else {
+            statusText = `❌ ${entry.errorMessage || "Fehler"}`;
+        }
+
+        item.innerHTML = `
+            <span class="file-queue-item__name">
+                ${entry.fileName} → <strong>${entry.playlistName}</strong>
+            </span>
+            <span class="file-queue-item__status">${statusText}</span>
+        `;
+
+        if (entry.status === "pending") {
+
+            const removeButton = document.createElement("button");
+            removeButton.type = "button";
+            removeButton.textContent = "Entfernen";
+            removeButton.className = "file-queue-item__remove";
+            removeButton.addEventListener("click", () => removeFileFromQueue(entry.id));
+
+            item.appendChild(removeButton);
+        }
+
+        if (entry.status === "done" && entry.playlistUrl) {
+
+            const link = document.createElement("a");
+            link.href = entry.playlistUrl;
+            link.target = "_blank";
+            link.rel = "noopener";
+            link.textContent = "In Spotify öffnen";
+            link.className = "file-queue-item__link";
+
+            item.appendChild(link);
+        }
+
+        listElement.appendChild(item);
+    }
+
+    const hasPendingFiles = fileQueue.some(entry => entry.status === "pending");
+    createFilesButton.hidden = !hasPendingFiles;
+
+    const resultsElement = document.getElementById("file-playlist-results");
+
+    if (skippedCount > 0) {
+        resultsElement.textContent =
+            `${skippedCount} Datei(en) wurden ignoriert (nur .txt-Dateien werden unterstützt).`;
+    } else if (fileQueue.length === 0) {
+        resultsElement.textContent = "";
+    }
+}
+
+
+// Verarbeitet die Warteschlange sequentiell: für jede Datei wird
+// eine eigene Playlist erstellt, bevor die nächste Datei dran ist
+// (nacheinander statt parallel, um kein Rate Limit auszulösen).
+async function createPlaylistsFromFiles() {
+
+    const createFilesButton = document.getElementById("create-playlists-from-files-button");
+
+    if (createFilesButton.disabled) {
+        return;
+    }
+
+    createFilesButton.disabled = true;
+
+    const pendingEntries = fileQueue.filter(entry => entry.status === "pending");
+
+    for (const entry of pendingEntries) {
+
+        if (entry.trackIds.length === 0) {
+
+            entry.status = "error";
+            entry.errorMessage = "Keine gültigen Titel in der Datei gefunden.";
+            renderFileQueue();
+            continue;
+        }
+
+        entry.status = "creating";
+        entry.progressText = "wird erstellt...";
+        renderFileQueue();
+
+        try {
+
+            const { playlist, requestedCount, actualTrackCount } =
+                await createPlaylistFromTracks(
+                    entry.playlistName,
+                    entry.trackIds,
+                    (text) => {
+                        entry.progressText = text;
+                        renderFileQueue();
+                    }
+                );
+
+            entry.status = "done";
+            entry.playlistUrl = playlist.external_urls.spotify;
+            entry.actualTrackCount = actualTrackCount;
+            entry.requestedCount = requestedCount;
+
+        } catch (error) {
+
+            console.error(`Playlist für Datei "${entry.fileName}" fehlgeschlagen:`, error);
+
+            entry.status = "error";
+            entry.errorMessage = error.message || "Unbekannter Fehler";
+
+            // Bei abgelaufener Sitzung Login-Status aktualisieren und
+            // die restlichen Dateien nicht weiter versuchen.
+            if (error.message?.includes("Sitzung abgelaufen") ||
+                error.message?.includes("Nicht mit Spotify verbunden")) {
+
+                await updateLoginStatus();
+                renderFileQueue();
+                break;
+            }
+        }
+
+        renderFileQueue();
+    }
+
+    createFilesButton.disabled = false;
+}
+
+
+// --------------------------------------------------
+// Drag & Drop einrichten
+// --------------------------------------------------
+
+function setupFileDropZone() {
+
+    const dropZone = document.getElementById("file-drop-zone");
+    const fileInput = document.getElementById("file-input");
+
+    // Klick auf die Drop-Zone öffnet den normalen Datei-Dialog
+    // (Fallback für alle, die nicht per Drag & Drop arbeiten wollen
+    // oder können, z. B. Tastaturnutzung oder mobile Geräte).
+    dropZone.addEventListener("click", () => fileInput.click());
+
+    dropZone.addEventListener("keydown", (event) => {
+        if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            fileInput.click();
+        }
+    });
+
+    fileInput.addEventListener("change", async (event) => {
+        await addFilesToQueue(event.target.files);
+        fileInput.value = ""; // erlaubt erneutes Auswählen derselben Datei
+    });
+
+    ["dragenter", "dragover"].forEach(eventName => {
+        dropZone.addEventListener(eventName, (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            dropZone.classList.add("drop-zone--active");
+        });
+    });
+
+    ["dragleave", "drop"].forEach(eventName => {
+        dropZone.addEventListener(eventName, (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            dropZone.classList.remove("drop-zone--active");
+        });
+    });
+
+    dropZone.addEventListener("drop", async (event) => {
+
+        const droppedFiles = event.dataTransfer?.files;
+
+        if (droppedFiles && droppedFiles.length > 0) {
+            await addFilesToQueue(droppedFiles);
+        }
+    });
 }
 
 
@@ -867,10 +1099,14 @@ document
     .getElementById("create-playlist-button")
     .addEventListener("click", createPlaylist);
 
+document
+    .getElementById("create-playlists-from-files-button")
+    .addEventListener("click", createPlaylistsFromFiles);
+
 // --------------------------------------------------
 // Anwendung starten
 // --------------------------------------------------
 
+setupFileDropZone();
 handleAuthorizationCallback();
-
 updateLoginStatus();
