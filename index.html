@@ -19,30 +19,42 @@
             Tracks in. Playlist out. No clicking around in the Spotify app.
         </p>
 
-        <section class="card">
+        <section class="card card--secondary">
 
             <h2>Spotify</h2>
 
-            <p id="login-status">
+            <p id="login-status" aria-live="polite">
                 Not connected yet.
             </p>
 
-            <button id="login-button">
+            <button id="login-button" class="button-white">
+                <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M10 13a5 5 0 0 0 7.07 0l2.83-2.83a5 5 0 0 0-7.07-7.07l-1.5 1.5"></path>
+                    <path d="M14 11a5 5 0 0 0-7.07 0L4.1 13.83a5 5 0 0 0 7.07 7.07l1.5-1.5"></path>
+                </svg>
                 Connect with Spotify
             </button>
 
         </section>
 
-        <section class="card">
+        <section class="card card--accent">
 
             <h2>From Files</h2>
 
             <p class="hint">
                 Drop one or more .txt files here. One file, one playlist –
                 the filename becomes the playlist name automatically.
+                No typing, no renaming.
             </p>
 
             <div id="file-drop-zone" class="drop-zone" tabindex="0" role="button" aria-label="Upload TXT files">
+
+                <svg class="dropzone-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M12 3v12"></path>
+                    <path d="M7 8l5-5 5 5"></path>
+                    <path d="M5 21h14"></path>
+                </svg>
+
                 <p>
                     Drop files here<br>
                     or click to browse
@@ -57,13 +69,33 @@
                 >
             </div>
 
+            <p id="file-queue-empty" class="hint file-queue-empty">
+                No files in the queue yet — drop some above and they'll show up here.
+            </p>
+
             <ul id="file-queue-list" class="file-queue-list"></ul>
 
-            <button id="create-playlists-from-files-button" hidden>
-                Create playlists
-            </button>
+            <label class="toggle-row" for="files-public-toggle">
+                <input type="checkbox" id="files-public-toggle">
+                Make playlists public
+            </label>
 
-            <div id="file-playlist-results"></div>
+            <div class="file-queue-buttons">
+                <button id="clear-file-queue-button" class="button-secondary" hidden>
+                    <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M3 6h18"></path>
+                        <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                        <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path>
+                    </svg>
+                    Clear all
+                </button>
+
+                <button id="create-playlists-from-files-button" hidden>
+                    Create playlists
+                </button>
+            </div>
+
+            <div id="file-playlist-results" aria-live="polite"></div>
 
         </section>
 
@@ -82,6 +114,11 @@
                 placeholder="What should it be called?"
             >
 
+            <label class="toggle-row" for="playlist-public-toggle">
+                <input type="checkbox" id="playlist-public-toggle">
+                Make playlist public
+            </label>
+
         </section>
 
         <section class="card">
@@ -89,7 +126,8 @@
             <h2>Tracks</h2>
 
             <p class="hint">
-                Spotify track IDs. One line, one track.
+                Spotify URIs, URLs, or track IDs. One line, one track.
+                That's all it takes.
             </p>
 
             <textarea
@@ -97,17 +135,19 @@
                 placeholder="spotify:track:1EpSEIbldNM7SQ6koEQqWT&#10;spotify:track:..."
             ></textarea>
 
-            <button id="validate-button">
+            <button id="validate-button" class="button-white">
                 Check tracks
             </button>
 
-            <div id="validation-result"></div>
+            <div id="validation-result" aria-live="polite"></div>
 
-            <button id="create-playlist-button">
+            <button id="create-playlist-button" class="button-white">
                 Build playlist
             </button>
 
-            <div id="playlist-result"></div>
+            <progress id="playlist-progress" class="playlist-progress" value="0" max="100" hidden></progress>
+
+            <div id="playlist-result" aria-live="polite"></div>
 
         </section>
 
