@@ -1039,6 +1039,11 @@ function setupFileDropZone() {
     const dropZone = document.getElementById("file-drop-zone");
     const fileInput = document.getElementById("file-input");
 
+    if (!dropZone || !fileInput) {
+        console.warn("Drop-Zone-Elemente wurden im HTML nicht gefunden - Datei-Upload ist deaktiviert.");
+        return;
+    }
+
     // Klick auf die Drop-Zone öffnet den normalen Datei-Dialog
     // (Fallback für alle, die nicht per Drag & Drop arbeiten wollen
     // oder können, z. B. Tastaturnutzung oder mobile Geräte).
@@ -1087,21 +1092,27 @@ function setupFileDropZone() {
 // Event-Listener
 // --------------------------------------------------
 
-document
-    .getElementById("login-button")
-    .addEventListener("click", loginWithSpotify);
+// Registriert einen Click-Handler nur, wenn das Element tatsächlich
+// existiert. So bricht ein einzelnes fehlendes/falsch benanntes
+// Element (z. B. durch ein veraltetes HTML) nicht die komplette
+// restliche Initialisierung ab - es gibt stattdessen eine klare
+// Warnung in der Konsole.
+function addClickListener(elementId, handler) {
 
-document
-    .getElementById("validate-button")
-    .addEventListener("click", validateTracks);
+    const element = document.getElementById(elementId);
 
-document
-    .getElementById("create-playlist-button")
-    .addEventListener("click", createPlaylist);
+    if (!element) {
+        console.warn(`Element mit id="${elementId}" wurde im HTML nicht gefunden.`);
+        return;
+    }
 
-document
-    .getElementById("create-playlists-from-files-button")
-    .addEventListener("click", createPlaylistsFromFiles);
+    element.addEventListener("click", handler);
+}
+
+addClickListener("login-button", loginWithSpotify);
+addClickListener("validate-button", validateTracks);
+addClickListener("create-playlist-button", createPlaylist);
+addClickListener("create-playlists-from-files-button", createPlaylistsFromFiles);
 
 // --------------------------------------------------
 // Anwendung starten
