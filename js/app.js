@@ -1,6 +1,7 @@
 // Spotify Playlist Generator
 // OAuth 2.0 mit PKCE + Refresh-Token + CSRF-Schutz (state)
 // + Playlist-Erstellung aus TXT-Dateien per Drag & Drop
+// + Public/Private-Toggle, Fortschrittsanzeige, Clear-All
 
 const CLIENT_ID = "b7a1cad39a6e4ec6b3a82511b6b5e682";
 
@@ -30,6 +31,9 @@ const TOKEN_REFRESH_MARGIN_SECONDS = 60;
 
 // Spotify-übliche Obergrenze für Playlist-Namen in der UI.
 const MAX_PLAYLIST_NAME_LENGTH = 100;
+
+// Wie lange der grüne "Erfolgs-Puls" auf einer Card sichtbar bleibt.
+const SUCCESS_PULSE_DURATION_MS = 900;
 
 
 // --------------------------------------------------
@@ -410,6 +414,31 @@ function parseTrackLines(text) {
 
 
 // --------------------------------------------------
+// Hilfsfunktion: Card kurz grün aufleuchten lassen
+// --------------------------------------------------
+
+function pulseCard(cardElement) {
+
+    if (!cardElement) {
+        return;
+    }
+
+    cardElement.classList.remove("card--success-pulse");
+
+    // Erzwingt einen Reflow, damit die Animation auch dann neu
+    // startet, wenn die Klasse kurz zuvor schon einmal gesetzt war.
+    void cardElement.offsetWidth;
+
+    cardElement.classList.add("card--success-pulse");
+
+    setTimeout(
+        () => cardElement.classList.remove("card--success-pulse"),
+        SUCCESS_PULSE_DURATION_MS
+    );
+}
+
+
+// --------------------------------------------------
 // Hilfsfunktion: Fetch mit Timeout
 // --------------------------------------------------
 
@@ -584,17 +613,23 @@ function validateTracks() {
 // Kernfunktion: Eine Playlist aus Track-IDs erstellen
 // --------------------------------------------------
 
-async function createPlaylistFromTracks(playlistName, trackIds, onStatus) {
+// onStatus(text, fraction) wird für Fortschritts-/Wartemeldungen
+// aufgerufen. "fraction" ist eine Zahl zwischen 0 und 1 (Fortschritt
+// beim Hinzufügen der Titel) oder null, wenn sich der Fortschritt
+// durch diesen Zwischenschritt nicht ändert (z. B. während einer
+// Rate-Limit-Wartezeit) - der Aufrufer soll den zuletzt bekannten
+// Fortschrittswert dann einfach unverändert lassen.
+async function createPlaylistFromTracks(playlistName, trackIds, isPublic, onStatus) {
 
-    const notify = (text) => {
-        if (onStatus) onStatus(text);
+    const notify = (text, fraction = null) => {
+        if (onStatus) onStatus(text, fraction);
     };
 
     // ------------------------------------------
     // 1. Playlist erstellen
     // ------------------------------------------
 
-    notify(`"${playlistName}" is coming together... (0 / ${trackIds.length})`);
+    notify(`"${playlistName}" is coming together... (0 / ${trackIds.length})`, 0);
 
     const playlistResponse = await fetchSpotifyApi(
         "https://api.spotify.com/v1/me/playlists",
@@ -603,7 +638,7 @@ async function createPlaylistFromTracks(playlistName, trackIds, onStatus) {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
                 name: playlistName,
-                public: false,
+                public: isPublic,
                 collaborative: false,
                 description: "Created with the Spotify Playlist Generator"
             })
@@ -649,7 +684,9 @@ async function createPlaylistFromTracks(playlistName, trackIds, onStatus) {
 
         addedCount += batch.length;
 
-        notify(`"${playlistName}" is coming together... (${addedCount} / ${trackUris.length})`);
+        const fraction = trackUris.length > 0 ? addedCount / trackUris.length : 1;
+
+        notify(`"${playlistName}" is coming together... (${addedCount} / ${trackUris.length})`, fraction);
     }
 
     // ------------------------------------------
@@ -695,8 +732,10 @@ async function createPlaylist() {
     }
 
     const playlistName = document.getElementById("playlist-name").value.trim();
+    const isPublic = document.getElementById("playlist-public-toggle").checked;
     const input = document.getElementById("track-input").value;
     const result = document.getElementById("playlist-result");
+    const progressBar = document.getElementById("playlist-progress");
 
     if (!playlistName) {
         result.textContent = "Give it a name first.";
@@ -717,6 +756,8 @@ async function createPlaylist() {
     }
 
     createButton.disabled = true;
+    progressBar.hidden = false;
+    progressBar.value = 0;
 
     try {
 
@@ -724,10 +765,18 @@ async function createPlaylist() {
             await createPlaylistFromTracks(
                 playlistName,
                 trackIds,
-                (text) => { result.textContent = text; }
+                isPublic,
+                (text, fraction) => {
+                    result.textContent = text;
+                    if (fraction !== null && fraction !== undefined) {
+                        progressBar.value = Math.round(fraction * 100);
+                    }
+                }
             );
 
         result.innerHTML = buildPlaylistResultHtml(playlist, requestedCount, actualTrackCount);
+
+        pulseCard(result.closest(".card"));
 
     } catch (error) {
 
@@ -741,6 +790,7 @@ async function createPlaylist() {
     } finally {
 
         createButton.disabled = false;
+        progressBar.hidden = true;
     }
 }
 
@@ -807,6 +857,11 @@ function buildPlaylistResultHtml(playlist, requestedCount, actualTrackCount) {
 
 let fileQueue = [];
 
+// Merkt sich, welche Queue-Einträge bereits einmal gerendert wurden,
+// damit die Enter-Animation nur bei neu hinzugefügten Dateien läuft
+// und nicht bei jedem Fortschritts-Update erneut abspielt.
+let renderedFileIds = new Set();
+
 function generateQueueId() {
     return (crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`);
 }
@@ -852,7 +907,8 @@ async function addFilesToQueue(fileList) {
             playlistName: derivePlaylistNameFromFileName(file.name),
             trackIds,
             invalidCount: invalidEntries.length,
-            status: "pending" // pending | creating | done | error
+            status: "pending", // pending | creating | done | error
+            progressPercent: 0
         });
     }
 
@@ -867,10 +923,23 @@ function removeFileFromQueue(id) {
 }
 
 
+// Leert die komplette Warteschlange (unabhängig vom Status der
+// einzelnen Einträge). Bereits erstellte Playlists bei Spotify sind
+// davon nicht betroffen - es wird nur die lokale Anzeige geleert.
+function clearFileQueue() {
+
+    fileQueue = [];
+    renderedFileIds = new Set();
+    renderFileQueue();
+}
+
+
 function renderFileQueue(skippedCount = 0) {
 
     const listElement = document.getElementById("file-queue-list");
     const createFilesButton = document.getElementById("create-playlists-from-files-button");
+    const clearButton = document.getElementById("clear-file-queue-button");
+    const emptyState = document.getElementById("file-queue-empty");
 
     listElement.innerHTML = "";
 
@@ -879,16 +948,36 @@ function renderFileQueue(skippedCount = 0) {
         const item = document.createElement("li");
         item.className = `file-queue-item file-queue-item--${entry.status}`;
 
+        if (!renderedFileIds.has(entry.id)) {
+            item.classList.add("file-queue-item--enter");
+        }
+
         let statusText;
+        let progressHtml = "";
 
         if (entry.status === "pending") {
+
             statusText = `${entry.trackIds.length} tracks in` +
                 (entry.invalidCount > 0 ? `, ${entry.invalidCount} out` : "");
+
         } else if (entry.status === "creating") {
+
             statusText = entry.progressText || "running...";
+
+            progressHtml = `
+                <progress
+                    class="file-queue-item__progress"
+                    value="${entry.progressPercent ?? 0}"
+                    max="100"
+                ></progress>
+            `;
+
         } else if (entry.status === "done") {
+
             statusText = "✅ Done";
+
         } else {
+
             statusText = `❌ ${entry.errorMessage || "Error"}`;
         }
 
@@ -897,14 +986,25 @@ function renderFileQueue(skippedCount = 0) {
                 ${entry.fileName} → <strong>${entry.playlistName}</strong>
             </span>
             <span class="file-queue-item__status">${statusText}</span>
+            ${progressHtml}
         `;
 
         if (entry.status === "pending") {
 
             const removeButton = document.createElement("button");
             removeButton.type = "button";
-            removeButton.textContent = "Remove";
             removeButton.className = "file-queue-item__remove";
+            removeButton.setAttribute("aria-label", `Remove ${entry.fileName} from the queue`);
+            removeButton.title = "Remove";
+
+            removeButton.innerHTML = `
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M3 6h18"></path>
+                    <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                    <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path>
+                </svg>
+            `;
+
             removeButton.addEventListener("click", () => removeFileFromQueue(entry.id));
 
             item.appendChild(removeButton);
@@ -925,8 +1025,13 @@ function renderFileQueue(skippedCount = 0) {
         listElement.appendChild(item);
     }
 
+    renderedFileIds = new Set(fileQueue.map(entry => entry.id));
+
     const hasPendingFiles = fileQueue.some(entry => entry.status === "pending");
     createFilesButton.hidden = !hasPendingFiles;
+
+    clearButton.hidden = fileQueue.length === 0;
+    emptyState.hidden = fileQueue.length > 0;
 
     const resultsElement = document.getElementById("file-playlist-results");
 
@@ -942,12 +1047,16 @@ function renderFileQueue(skippedCount = 0) {
 async function createPlaylistsFromFiles() {
 
     const createFilesButton = document.getElementById("create-playlists-from-files-button");
+    const clearButton = document.getElementById("clear-file-queue-button");
+    const isPublic = document.getElementById("files-public-toggle").checked;
+    const filesCard = document.getElementById("file-drop-zone").closest(".card");
 
     if (createFilesButton.disabled) {
         return;
     }
 
     createFilesButton.disabled = true;
+    clearButton.disabled = true;
 
     const pendingEntries = fileQueue.filter(entry => entry.status === "pending");
 
@@ -963,6 +1072,7 @@ async function createPlaylistsFromFiles() {
 
         entry.status = "creating";
         entry.progressText = "running...";
+        entry.progressPercent = 0;
         renderFileQueue();
 
         try {
@@ -971,8 +1081,12 @@ async function createPlaylistsFromFiles() {
                 await createPlaylistFromTracks(
                     entry.playlistName,
                     entry.trackIds,
-                    (text) => {
+                    isPublic,
+                    (text, fraction) => {
                         entry.progressText = text;
+                        if (fraction !== null && fraction !== undefined) {
+                            entry.progressPercent = Math.round(fraction * 100);
+                        }
                         renderFileQueue();
                     }
                 );
@@ -981,6 +1095,8 @@ async function createPlaylistsFromFiles() {
             entry.playlistUrl = playlist.external_urls.spotify;
             entry.actualTrackCount = actualTrackCount;
             entry.requestedCount = requestedCount;
+
+            pulseCard(filesCard);
 
         } catch (error) {
 
@@ -1002,6 +1118,7 @@ async function createPlaylistsFromFiles() {
     }
 
     createFilesButton.disabled = false;
+    clearButton.disabled = false;
 }
 
 
@@ -1083,6 +1200,7 @@ addClickListener("login-button", loginWithSpotify);
 addClickListener("validate-button", validateTracks);
 addClickListener("create-playlist-button", createPlaylist);
 addClickListener("create-playlists-from-files-button", createPlaylistsFromFiles);
+addClickListener("clear-file-queue-button", clearFileQueue);
 
 // --------------------------------------------------
 // Anwendung starten
