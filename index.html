@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="de">
 <head>
@@ -36,7 +35,43 @@
 
         <section class="card">
 
-            <h2>Playlist</h2>
+            <h2>Playlists aus TXT-Dateien</h2>
+
+            <p class="hint">
+                Ziehe eine oder mehrere .txt-Dateien hierher (eine Zeile pro
+                Titel, gleiche Regeln wie unten). Für jede Datei wird eine
+                eigene Playlist erstellt - der Dateiname (ohne ".txt") wird
+                dabei automatisch als Playlist-Name verwendet.
+            </p>
+
+            <div id="file-drop-zone" class="drop-zone" tabindex="0" role="button" aria-label="TXT-Dateien hochladen">
+                <p>
+                    TXT-Dateien hierher ziehen<br>
+                    oder klicken, um Dateien auszuwählen
+                </p>
+
+                <input
+                    type="file"
+                    id="file-input"
+                    accept=".txt,text/plain"
+                    multiple
+                    hidden
+                >
+            </div>
+
+            <ul id="file-queue-list" class="file-queue-list"></ul>
+
+            <button id="create-playlists-from-files-button" hidden>
+                Playlists aus Dateien erstellen
+            </button>
+
+            <div id="file-playlist-results"></div>
+
+        </section>
+
+        <section class="card">
+
+            <h2>Playlist manuell erstellen</h2>
 
             <label for="playlist-name">
                 Playlist-Name
@@ -75,7 +110,8 @@
                 Playlist erstellen
             </button>
 
-<div id="playlist-result"></div>
+            <div id="playlist-result"></div>
+
         </section>
 
     </main>
