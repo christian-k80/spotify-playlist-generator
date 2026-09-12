@@ -329,14 +329,41 @@ async function updateLoginStatus() {
     if (accessToken) {
 
         status.textContent = "Connected. Let's go.";
-        button.textContent = "Connected";
-        button.disabled = true;
+        button.textContent = "Disconnect";
+        button.disabled = false;
+        button.dataset.connected = "true";
 
     } else {
 
         status.textContent = "Not connected yet.";
         button.textContent = "Connect with Spotify";
         button.disabled = false;
+        button.dataset.connected = "false";
+    }
+}
+
+
+// Trennt die Verbindung: löscht alle lokal gespeicherten Tokens.
+// Der Access Token bei Spotify selbst wird dadurch nicht widerrufen
+// (Spotify bietet dafür keinen öffentlichen Endpunkt) - beim
+// nächsten "Connect" fragt Spotify ggf. erneut nach Zustimmung.
+function disconnectFromSpotify() {
+
+    clearAllAuthData();
+    updateLoginStatus();
+}
+
+
+// Reagiert auf den Klick des Login-Buttons je nach aktuellem
+// Verbindungsstatus: verbunden -> trennen, sonst -> Login starten.
+async function handleLoginButtonClick() {
+
+    const button = document.getElementById("login-button");
+
+    if (button.dataset.connected === "true") {
+        disconnectFromSpotify();
+    } else {
+        await loginWithSpotify();
     }
 }
 
@@ -1196,7 +1223,7 @@ function addClickListener(elementId, handler) {
     element.addEventListener("click", handler);
 }
 
-addClickListener("login-button", loginWithSpotify);
+addClickListener("login-button", handleLoginButtonClick);
 addClickListener("validate-button", validateTracks);
 addClickListener("create-playlist-button", createPlaylist);
 addClickListener("create-playlists-from-files-button", createPlaylistsFromFiles);
