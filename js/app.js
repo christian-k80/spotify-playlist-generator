@@ -10,7 +10,30 @@ const REDIRECT_URI =
 
 const SCOPES = [
     "playlist-modify-public",
-    "playlist-modify-private"
+    "playlist-modify-private",
+    "playlist-read-private",
+    "playlist-read-collaborative"
+];
+
+// Anzahl Titel pro Seite beim paginierten Abrufen einer Playlist
+// für den Export.
+const EXPORT_PAGE_SIZE = 100;
+
+// Spaltenreihenfolge der exportierten TXT-Datei. "Popularity",
+// "Record Label" und alle Audio-Feature-Spalten (Danceability,
+// Energy, Key, Loudness, Mode, Speechiness, Acousticness,
+// Instrumentalness, Liveness, Valence, Tempo) fehlen bewusst - die
+// zugehörigen Spotify-Endpunkte/Felder wurden 2024/2026 entfernt
+// und liefern für keine App mehr Daten.
+const EXPORT_COLUMNS = [
+    "Track URI",
+    "Track Name",
+    "Album Name",
+    "Artist Name(s)",
+    "Release Date",
+    "Duration (ms)",
+    "Explicit",
+    "Genres"
 ];
 
 // Maximale Anzahl an Wiederholungsversuchen bei 429 (Rate Limit),
@@ -437,6 +460,270 @@ function parseTrackLines(text) {
     const duplicateCount = rawTrackIds.length - trackIds.length;
 
     return { trackIds, invalidEntries, duplicateCount };
+}
+
+
+// --------------------------------------------------
+// Playlist-Export
+// --------------------------------------------------
+
+// Erkennt eine Playlist-ID aus einer Spotify-URI, einer
+// open.spotify.com-URL oder einer direkt eingegebenen ID.
+function extractPlaylistId(input) {
+
+    const value = input.trim();
+
+    const uriMatch = value.match(/^spotify:playlist:([a-zA-Z0-9]+)$/);
+
+    if (uriMatch) {
+        return uriMatch[1];
+    }
+
+    try {
+
+        const url = new URL(value);
+
+        if (url.hostname === "open.spotify.com") {
+
+            const pathParts = url.pathname.split("/");
+            const playlistIndex = pathParts.indexOf("playlist");
+
+            if (playlistIndex !== -1 && pathParts[playlistIndex + 1]) {
+                return pathParts[playlistIndex + 1];
+            }
+        }
+
+    } catch {
+        // Keine gültige URL
+    }
+
+    if (/^[a-zA-Z0-9]{22}$/.test(value)) {
+        return value;
+    }
+
+    return null;
+}
+
+
+// Entfernt Semikolons und Zeilenumbrüche aus einem Feldwert, damit
+// die Spaltenstruktur der TXT-Datei nicht kaputtgeht.
+function sanitizeExportField(value) {
+
+    if (value === null || value === undefined) {
+        return "";
+    }
+
+    return String(value).replace(/[;\r\n]+/g, ",").trim();
+}
+
+
+// Entfernt Zeichen aus einem Playlist-Namen, die in Dateinamen auf
+// den meisten Betriebssystemen nicht erlaubt sind.
+function sanitizeFileName(name) {
+
+    const cleaned = name.replace(/[\\/:*?"<>|]/g, "_").trim();
+
+    return cleaned || "playlist";
+}
+
+
+function triggerTextFileDownload(fileName, content) {
+
+    const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = fileName;
+
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    URL.revokeObjectURL(url);
+}
+
+
+async function exportPlaylist() {
+
+    const exportButton = document.getElementById("export-playlist-button");
+
+    if (exportButton.disabled) {
+        return;
+    }
+
+    const input = document.getElementById("export-playlist-input").value;
+    const result = document.getElementById("export-result");
+    const progressBar = document.getElementById("export-progress");
+
+    const playlistId = extractPlaylistId(input);
+
+    if (!playlistId) {
+        result.textContent = "That doesn't look like a playlist link, URI, or ID.";
+        return;
+    }
+
+    exportButton.disabled = true;
+    progressBar.hidden = false;
+    progressBar.value = 0;
+    result.textContent = "Loading playlist...";
+
+    const notifyWaiting = (waitSeconds) => {
+        result.textContent = `Spotify's hitting the brakes – waiting ${waitSeconds}s...`;
+    };
+
+    try {
+
+        // ------------------------------------------
+        // 1. Playlist-Metadaten laden (für den Dateinamen)
+        // ------------------------------------------
+
+        const playlistResponse = await fetchSpotifyApi(
+            `https://api.spotify.com/v1/playlists/${playlistId}`,
+            { method: "GET" },
+            notifyWaiting
+        );
+
+        if (!playlistResponse.ok) {
+            throw new Error(
+                await buildApiErrorMessage(playlistResponse, "Could not load playlist")
+            );
+        }
+
+        const playlistData = await playlistResponse.json();
+        const playlistName = playlistData.name || "playlist";
+
+        // ------------------------------------------
+        // 2. Alle Titel paginiert laden
+        // ------------------------------------------
+
+        const tracks = [];
+        let offset = 0;
+        let total = null;
+
+        do {
+
+            const itemsResponse = await fetchSpotifyApi(
+                `https://api.spotify.com/v1/playlists/${playlistId}/items?limit=${EXPORT_PAGE_SIZE}&offset=${offset}`,
+                { method: "GET" },
+                notifyWaiting
+            );
+
+            if (!itemsResponse.ok) {
+                throw new Error(
+                    await buildApiErrorMessage(itemsResponse, "Could not load tracks")
+                );
+            }
+
+            const itemsData = await itemsResponse.json();
+            total = itemsData.total ?? total ?? 0;
+
+            for (const item of itemsData.items || []) {
+                if (item.track) {
+                    tracks.push(item.track);
+                }
+            }
+
+            offset += EXPORT_PAGE_SIZE;
+
+            // Das Laden der Titel macht die erste Hälfte des Fortschritts
+            // aus, der Genre-Abgleich pro Künstler danach die zweite.
+            const loadFraction = total > 0 ? Math.min(tracks.length / total, 1) : 1;
+            progressBar.value = Math.round(loadFraction * 50);
+
+            result.textContent = `Loading tracks... (${tracks.length} / ${total ?? "?"})`;
+
+        } while (total !== null && offset < total);
+
+        // ------------------------------------------
+        // 3. Genres pro einzigartigem Künstler laden
+        // ------------------------------------------
+
+        // Seit Februar 2026 gibt es keinen Batch-Endpunkt für mehrere
+        // Künstler mehr ("Get Several Artists" wurde entfernt) - jeder
+        // einzigartige Künstler muss einzeln abgefragt werden.
+        const uniqueArtistIds = [...new Set(
+            tracks.flatMap(track => (track.artists || []).map(artist => artist.id).filter(Boolean))
+        )];
+
+        const genresByArtistId = new Map();
+
+        for (let i = 0; i < uniqueArtistIds.length; i++) {
+
+            const artistId = uniqueArtistIds[i];
+
+            const artistResponse = await fetchSpotifyApi(
+                `https://api.spotify.com/v1/artists/${artistId}`,
+                { method: "GET" },
+                notifyWaiting
+            );
+
+            genresByArtistId.set(
+                artistId,
+                artistResponse.ok ? (await artistResponse.json()).genres || [] : []
+            );
+
+            const genreFraction = uniqueArtistIds.length > 0 ?
+                (i + 1) / uniqueArtistIds.length :
+                1;
+
+            progressBar.value = Math.round(50 + genreFraction * 50);
+
+            result.textContent =
+                `Fetching genres... (${i + 1} / ${uniqueArtistIds.length} artists)`;
+        }
+
+        // ------------------------------------------
+        // 4. TXT-Datei zusammenbauen und herunterladen
+        // ------------------------------------------
+
+        const lines = [EXPORT_COLUMNS.join(";")];
+
+        for (const track of tracks) {
+
+            const artistNames = (track.artists || [])
+                .map(artist => artist.name)
+                .join(", ");
+
+            const genres = [...new Set(
+                (track.artists || []).flatMap(
+                    artist => genresByArtistId.get(artist.id) || []
+                )
+            )].join(", ");
+
+            const row = [
+                track.uri || "",
+                track.name || "",
+                track.album?.name || "",
+                artistNames,
+                track.album?.release_date || "",
+                track.duration_ms ?? "",
+                track.explicit ? "true" : "false",
+                genres
+            ].map(sanitizeExportField);
+
+            lines.push(row.join(";"));
+        }
+
+        const fileName = `${sanitizeFileName(playlistName)}.txt`;
+
+        triggerTextFileDownload(fileName, lines.join("\n"));
+
+        result.textContent = `Done. ${tracks.length} tracks exported to "${fileName}".`;
+
+    } catch (error) {
+
+        console.error(error);
+
+        result.textContent = error.message || "Export didn't work out.";
+
+        await updateLoginStatus();
+
+    } finally {
+
+        exportButton.disabled = false;
+        progressBar.hidden = true;
+    }
 }
 
 
@@ -1228,6 +1515,7 @@ addClickListener("validate-button", validateTracks);
 addClickListener("create-playlist-button", createPlaylist);
 addClickListener("create-playlists-from-files-button", createPlaylistsFromFiles);
 addClickListener("clear-file-queue-button", clearFileQueue);
+addClickListener("export-playlist-button", exportPlaylist);
 
 // --------------------------------------------------
 // Anwendung starten
