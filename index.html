@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="de">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -16,7 +16,7 @@
         <h1>Spotify Playlist Generator</h1>
 
         <p class="intro">
-            Titel rein. Playlist raus. Kein Rumklicken in der Spotify-App.
+            Tracks in. Playlist out. No clicking around in the Spotify app.
         </p>
 
         <section class="card">
@@ -24,29 +24,29 @@
             <h2>Spotify</h2>
 
             <p id="login-status">
-                Noch nicht verbunden.
+                Not connected yet.
             </p>
 
             <button id="login-button">
-                Mit Spotify verbinden
+                Connect with Spotify
             </button>
 
         </section>
 
         <section class="card">
 
-            <h2>Aus Dateien</h2>
+            <h2>From Files</h2>
 
             <p class="hint">
-                Zieh eine oder mehrere .txt-Dateien rein. Eine Datei, eine
-                Playlist – der Dateiname wird automatisch zum Playlist-Namen.
-                Kein Tippen, kein Umbenennen.
+                Drop one or more .txt files here. One file, one playlist –
+                the filename becomes the playlist name automatically.
+                No typing, no renaming.
             </p>
 
-            <div id="file-drop-zone" class="drop-zone" tabindex="0" role="button" aria-label="TXT-Dateien hochladen">
+            <div id="file-drop-zone" class="drop-zone" tabindex="0" role="button" aria-label="Upload TXT files">
                 <p>
-                    Dateien hier ablegen<br>
-                    oder klicken und auswählen
+                    Drop files here<br>
+                    or click to browse
                 </p>
 
                 <input
@@ -61,7 +61,7 @@
             <ul id="file-queue-list" class="file-queue-list"></ul>
 
             <button id="create-playlists-from-files-button" hidden>
-                Playlists erstellen
+                Create playlists
             </button>
 
             <div id="file-playlist-results"></div>
@@ -70,28 +70,28 @@
 
         <section class="card">
 
-            <h2>Von Hand</h2>
+            <h2>By Hand</h2>
 
             <label for="playlist-name">
-                Playlist-Name
+                Playlist Name
             </label>
 
             <input
                 type="text"
                 id="playlist-name"
-                value="Meine nächste Playlist"
-                placeholder="Wie soll sie heißen?"
+                value="My Next Playlist"
+                placeholder="What should it be called?"
             >
 
         </section>
 
         <section class="card">
 
-            <h2>Titel</h2>
+            <h2>Tracks</h2>
 
             <p class="hint">
-                Spotify-URIs, -URLs oder Track-IDs. Eine Zeile, ein Titel.
-                Mehr braucht's nicht.
+                Spotify URIs, URLs, or track IDs. One line, one track.
+                That's all it takes.
             </p>
 
             <textarea
@@ -100,13 +100,13 @@
             ></textarea>
 
             <button id="validate-button">
-                Titel checken
+                Check tracks
             </button>
 
             <div id="validation-result"></div>
 
             <button id="create-playlist-button">
-                Playlist bauen
+                Build playlist
             </button>
 
             <div id="playlist-result"></div>
