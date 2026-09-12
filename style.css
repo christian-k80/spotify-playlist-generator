@@ -5,8 +5,8 @@
 body {
     margin: 0;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-    background: #f5f5f7;
-    color: #1d1d1f;
+    background: #0a0a0c;
+    color: #f5f5f7;
 }
 
 .container {
@@ -14,36 +14,71 @@ body {
     max-width: 800px;
     margin: 0 auto;
     padding: 24px;
+    position: relative;
+}
+
+/* Sehr subtiler, dunkelgrüner Verlauf hinter dem Header - bricht
+   die reine Fläche auf, ohne die Seite bunt wirken zu lassen. */
+.container::before {
+    content: "";
+    position: absolute;
+    top: -80px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 900px;
+    height: 400px;
+    background: radial-gradient(
+        ellipse at center,
+        rgba(29, 185, 84, 0.12) 0%,
+        rgba(29, 185, 84, 0) 70%
+    );
+    pointer-events: none;
+    z-index: 0;
+}
+
+.container > * {
+    position: relative;
+    z-index: 1;
 }
 
 h1 {
-    font-size: 32px;
-    margin-bottom: 8px;
+    font-size: 48px;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    margin-bottom: 12px;
+    line-height: 1.1;
 }
 
 h2 {
-    font-size: 22px;
-    margin-top: 0;
+    font-size: 13px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #9a9aa0;
+    margin: 0 0 16px 0;
 }
 
 .intro {
-    color: #666;
+    color: #9a9aa0;
     font-size: 17px;
-    margin-bottom: 24px;
+    line-height: 1.6;
+    margin-bottom: 32px;
+    max-width: 56ch;
 }
 
 .card {
-    background: white;
+    background: #141416;
+    border: 1px solid #232326;
     border-radius: 18px;
-    padding: 24px;
-    margin-bottom: 20px;
-    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.06);
+    padding: 28px;
+    margin-bottom: 24px;
 }
 
 label {
     display: block;
     margin-bottom: 8px;
     font-weight: 600;
+    color: #f5f5f7;
 }
 
 input,
@@ -51,10 +86,23 @@ textarea {
     width: 100%;
     font: inherit;
     font-size: 17px;
-    border: 1px solid #ccc;
+    border: 1px solid #2c2c30;
     border-radius: 12px;
     padding: 14px;
-    background: white;
+    background: #0e0e10;
+    color: #f5f5f7;
+}
+
+input::placeholder,
+textarea::placeholder {
+    color: #5a5a60;
+}
+
+input:focus,
+textarea:focus {
+    outline: none;
+    border-color: #1db954;
+    box-shadow: 0 0 0 3px rgba(29, 185, 84, 0.2);
 }
 
 textarea {
@@ -70,11 +118,17 @@ button {
     border: none;
     border-radius: 14px;
     font-size: 17px;
-    font-weight: 600;
+    font-weight: 700;
     cursor: pointer;
     background: #1db954;
-    color: white;
+    color: #05170c;
     touch-action: manipulation;
+    transition: box-shadow 0.15s ease, transform 0.1s ease, background-color 0.15s ease;
+}
+
+button:hover {
+    background: #22d660;
+    box-shadow: 0 0 0 1px rgba(29, 185, 84, 0.5), 0 0 24px rgba(29, 185, 84, 0.35);
 }
 
 button:active {
@@ -82,25 +136,33 @@ button:active {
 }
 
 button:disabled {
-    background: #b3e6c8;
+    background: #1e3a29;
+    color: #6f8f7c;
     cursor: not-allowed;
+    box-shadow: none;
+}
+
+button:focus-visible {
+    outline: 2px solid #1db954;
+    outline-offset: 2px;
 }
 
 .hint {
-    color: #666;
+    color: #9a9aa0;
     font-size: 15px;
-    line-height: 1.5;
+    line-height: 1.6;
 }
 
 #login-status {
     margin-bottom: 16px;
-    color: #666;
+    color: #9a9aa0;
 }
 
 #validation-result {
     margin-top: 16px;
     font-size: 16px;
     line-height: 1.6;
+    color: #d4d4d8;
 }
 
 
@@ -109,25 +171,25 @@ button:disabled {
    -------------------------------------------------- */
 
 .drop-zone {
-    border: 2px dashed #ccc;
+    border: 2px dashed #2c2c30;
     border-radius: 14px;
-    padding: 32px 16px;
+    padding: 40px 16px;
     text-align: center;
     cursor: pointer;
     margin-bottom: 16px;
-    background: #fafafa;
-    transition: background-color 0.15s ease, border-color 0.15s ease;
+    background: #0e0e10;
+    transition: background-color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
 .drop-zone p {
     margin: 0;
-    color: #666;
+    color: #9a9aa0;
     font-size: 16px;
-    line-height: 1.5;
+    line-height: 1.6;
 }
 
 .drop-zone:hover {
-    border-color: #1db954;
+    border-color: #3a3a40;
 }
 
 .drop-zone:focus-visible {
@@ -137,7 +199,12 @@ button:disabled {
 
 .drop-zone--active {
     border-color: #1db954;
-    background: rgba(29, 185, 84, 0.08);
+    background: rgba(29, 185, 84, 0.06);
+    box-shadow: 0 0 0 1px #1db954, 0 0 32px rgba(29, 185, 84, 0.25);
+}
+
+.drop-zone--active p {
+    color: #f5f5f7;
 }
 
 
@@ -157,30 +224,43 @@ button:disabled {
     justify-content: space-between;
     flex-wrap: wrap;
     gap: 8px 16px;
-    padding: 12px 0;
-    border-bottom: 1px solid #eee;
+    padding: 12px 14px;
+    margin-bottom: 8px;
+    border-radius: 10px;
+    background: #0e0e10;
+    border: 1px solid #232326;
+    border-left: 3px solid #2c2c30;
     font-size: 15px;
-}
-
-.file-queue-item:last-child {
-    border-bottom: none;
 }
 
 .file-queue-item__name {
     flex: 1 1 auto;
     min-width: 0;
     overflow-wrap: anywhere;
+    color: #f5f5f7;
 }
 
 .file-queue-item__status {
-    color: #666;
+    color: #9a9aa0;
     font-size: 14px;
     white-space: nowrap;
 }
 
+.file-queue-item--error {
+    border-left-color: #ff6b4a;
+}
+
 .file-queue-item--error .file-queue-item__status {
-    color: #d92d20;
+    color: #ff8a6a;
     white-space: normal;
+}
+
+.file-queue-item--creating {
+    border-left-color: #1db954;
+}
+
+.file-queue-item--done {
+    border-left-color: #1db954;
 }
 
 .file-queue-item--done .file-queue-item__status {
@@ -198,14 +278,16 @@ button:disabled {
 }
 
 .file-queue-item__remove {
-    background: #f2f2f2;
-    color: #1d1d1f;
-    border: 1px solid #ddd;
+    background: #1c1c1f;
+    color: #f5f5f7;
+    border: 1px solid #2c2c30;
     cursor: pointer;
+    box-shadow: none;
 }
 
 .file-queue-item__remove:hover {
-    background: #e8e8e8;
+    background: #232326;
+    box-shadow: none;
 }
 
 .file-queue-item__link {
@@ -217,13 +299,14 @@ button:disabled {
 
 .file-queue-item__link:hover {
     text-decoration: underline;
+    box-shadow: none;
 }
 
 #file-playlist-results {
     margin-top: 12px;
     font-size: 15px;
-    color: #666;
-    line-height: 1.5;
+    color: #9a9aa0;
+    line-height: 1.6;
 }
 
 
@@ -233,8 +316,13 @@ button:disabled {
         padding: 16px;
     }
 
+    .container::before {
+        width: 100%;
+        height: 260px;
+    }
+
     h1 {
-        font-size: 28px;
+        font-size: 34px;
     }
 
     .card {
@@ -243,7 +331,7 @@ button:disabled {
     }
 
     .drop-zone {
-        padding: 24px 12px;
+        padding: 28px 12px;
     }
 
     .file-queue-item {
