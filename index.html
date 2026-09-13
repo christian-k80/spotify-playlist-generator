@@ -37,7 +37,7 @@
                     Not connected yet.
                 </p>
 
-                <button id="login-button" class="button-white" data-connected="false">
+                <button id="login-button" data-connected="false">
                     <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                         <path d="M10 13a5 5 0 0 0 7.07 0l2.83-2.83a5 5 0 0 0-7.07-7.07l-1.5 1.5"></path>
                         <path d="M14 11a5 5 0 0 0-7.07 0L4.1 13.83a5 5 0 0 0 7.07 7.07l1.5-1.5"></path>
@@ -117,43 +117,47 @@
 
                 <h2>By Hand</h2>
 
-                <label for="playlist-name">
-                    Playlist Name
-                </label>
+                <div class="field">
+                    <label for="playlist-name">
+                        Playlist Name
+                    </label>
 
-                <input
-                    type="text"
-                    id="playlist-name"
-                    value="My Next Playlist"
-                    placeholder="What should it be called?"
-                >
+                    <input
+                        type="text"
+                        id="playlist-name"
+                        value="My Next Playlist"
+                        placeholder="What should it be called?"
+                    >
+                </div>
 
                 <label class="toggle-row" for="playlist-public-toggle">
                     <input type="checkbox" id="playlist-public-toggle">
                     Make playlist public
                 </label>
 
-                <label for="track-input">
-                    Tracks
-                </label>
+                <div class="field field--grow">
+                    <label for="track-input">
+                        Tracks
+                    </label>
 
-                <p class="hint">
-                    Spotify URIs, URLs, or track IDs. One line, one track.
-                    That's all it takes.
-                </p>
+                    <p class="hint">
+                        Spotify URIs, URLs, or track IDs. One line, one track.
+                        That's all it takes.
+                    </p>
 
-                <textarea
-                    id="track-input"
-                    placeholder="spotify:track:1EpSEIbldNM7SQ6koEQqWT&#10;spotify:track:..."
-                ></textarea>
+                    <textarea
+                        id="track-input"
+                        placeholder="spotify:track:1EpSEIbldNM7SQ6koEQqWT&#10;spotify:track:..."
+                    ></textarea>
+                </div>
 
-                <button id="validate-button" class="button-white">
+                <button id="validate-button">
                     Check tracks
                 </button>
 
                 <div id="validation-result" aria-live="polite"></div>
 
-                <button id="create-playlist-button" class="button-white">
+                <button id="create-playlist-button">
                     Build playlist
                 </button>
 
@@ -177,17 +181,19 @@
                     included.
                 </p>
 
-                <label for="export-playlist-input">
-                    Playlist URL, URI, or ID
-                </label>
+                <div class="field">
+                    <label for="export-playlist-input">
+                        Playlist URL, URI, or ID
+                    </label>
 
-                <input
-                    type="text"
-                    id="export-playlist-input"
-                    placeholder="https://open.spotify.com/playlist/..."
-                >
+                    <input
+                        type="text"
+                        id="export-playlist-input"
+                        placeholder="https://open.spotify.com/playlist/..."
+                    >
+                </div>
 
-                <button id="export-playlist-button" class="button-white">
+                <button id="export-playlist-button">
                     Export playlist
                 </button>
 
