@@ -1546,6 +1546,21 @@ function setupPanelNavigation() {
         return Math.round(panelsContainer.scrollLeft / width);
     }
 
+    // Setzt den aktiven Zustand von Punkten und Pfeil-Buttons direkt,
+    // unabhängig von "scroll"-Events. Bei einem Klick auf einen Punkt
+    // oder Pfeil soll die Farbe sofort wechseln, nicht erst wenn der
+    // (in manchen Browsern unzuverlässig feuernde) Scroll-Event der
+    // Smooth-Scroll-Animation eintrifft.
+    function setActiveIndex(index) {
+
+        dots.forEach((dot, dotIndex) => {
+            dot.classList.toggle("panel-dot--active", dotIndex === index);
+        });
+
+        prevButton.disabled = index === 0;
+        nextButton.disabled = index === panels.length - 1;
+    }
+
     function scrollToPanel(index) {
 
         const clampedIndex = Math.max(0, Math.min(index, panels.length - 1));
@@ -1554,18 +1569,12 @@ function setupPanelNavigation() {
             left: clampedIndex * panelsContainer.clientWidth,
             behavior: "smooth"
         });
+
+        setActiveIndex(clampedIndex);
     }
 
     function updateActiveState() {
-
-        const currentIndex = getCurrentIndex();
-
-        dots.forEach((dot, index) => {
-            dot.classList.toggle("panel-dot--active", index === currentIndex);
-        });
-
-        prevButton.disabled = currentIndex === 0;
-        nextButton.disabled = currentIndex === panels.length - 1;
+        setActiveIndex(getCurrentIndex());
     }
 
     // Scroll-Events feuern beim Wischen sehr häufig - per
