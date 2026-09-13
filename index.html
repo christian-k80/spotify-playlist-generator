@@ -14,7 +14,7 @@
     <header class="app-header">
         <h1>Spotify Playlist Generator</h1>
         <p class="intro">
-            Tracks in. Playlist out. No clicking around in the Spotify app.
+            Tracks in. Playlist out. No clicking around.
         </p>
     </header>
 
@@ -51,7 +51,7 @@
             <section class="panel" data-panel-label="From Files">
               <div class="card">
 
-                <h2>From Files</h2>
+                <h2>Import From File(s)</h2>
 
                 <p class="hint">
                     Drop one or more .txt files here. One file, one playlist –
@@ -89,7 +89,7 @@
 
                 <label class="toggle-row" for="files-public-toggle">
                     <input type="checkbox" id="files-public-toggle">
-                    Make playlists public
+                    Make playlist(s) public
                 </label>
 
                 <div class="file-queue-buttons">
@@ -103,7 +103,7 @@
                     </button>
 
                     <button id="create-playlists-from-files-button" hidden>
-                        Create playlists
+                        Create playlist(s)
                     </button>
                 </div>
 
@@ -115,7 +115,7 @@
             <section class="panel" data-panel-label="By Hand">
               <div class="card card--fill">
 
-                <h2>By Hand</h2>
+                <h2>From Spotify IDs</h2>
 
                 <div class="field">
                     <label for="playlist-name">
@@ -141,13 +141,13 @@
                     </label>
 
                     <p class="hint">
-                        Spotify URIs, URLs, or track IDs. One line, one track.
+                        Spotify track IDs. One line, one track.
                         That's all it takes.
                     </p>
 
                     <textarea
                         id="track-input"
-                        placeholder="spotify:track:1EpSEIbldNM7SQ6koEQqWT&#10;spotify:track:..."
+                        placeholder="spotify:track:id"
                     ></textarea>
                 </div>
 
@@ -171,19 +171,16 @@
             <section class="panel" data-panel-label="Export">
               <div class="card">
 
-                <h2>Export</h2>
+                <h2>Export Spotify playlist</h2>
 
                 <p class="hint">
-                    Paste a playlist link, URI, or ID to export its tracks as a
-                    semicolon-separated .txt file with the data Spotify's API
-                    still provides. Audio features, track/album popularity, and
-                    record label were removed from the API and can't be
-                    included.
+                    Paste a playlist link to export its tracks as a
+                    .txt file.
                 </p>
 
                 <div class="field">
                     <label for="export-playlist-input">
-                        Playlist URL, URI, or ID
+                        Playlist URL
                     </label>
 
                     <input
