@@ -727,6 +727,22 @@ async function exportPlaylist() {
 }
 
 
+// Escaped Sonderzeichen, bevor ein Wert in ein innerHTML-Template
+// eingesetzt wird. Ohne das könnte z. B. eine .txt-Datei mit einem
+// bösartigen Dateinamen (z. B. enthält "<img onerror=...>") Code im
+// Kontext dieser Seite ausführen und so an die in sessionStorage
+// gespeicherten Spotify-Tokens gelangen.
+function escapeHtml(value) {
+
+    return String(value)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+}
+
+
 // --------------------------------------------------
 // Hilfsfunktion: Card kurz grün aufleuchten lassen
 // --------------------------------------------------
@@ -1147,14 +1163,14 @@ function buildPlaylistResultHtml(playlist, requestedCount, actualTrackCount) {
 
     return `
         <p>
-            <strong>"${playlist.name}" is live.</strong>
+            <strong>"${escapeHtml(playlist.name)}" is live.</strong>
         </p>
 
         ${statusHtml}
 
         <p>
             <a
-                href="${playlist.external_urls.spotify}"
+                href="${escapeHtml(playlist.external_urls.spotify)}"
                 target="_blank"
                 rel="noopener"
             >
@@ -1297,9 +1313,9 @@ function renderFileQueue(skippedCount = 0) {
 
         item.innerHTML = `
             <span class="file-queue-item__name">
-                ${entry.fileName} → <strong>${entry.playlistName}</strong>
+                ${escapeHtml(entry.fileName)} → <strong>${escapeHtml(entry.playlistName)}</strong>
             </span>
-            <span class="file-queue-item__status">${statusText}</span>
+            <span class="file-queue-item__status">${escapeHtml(statusText)}</span>
             ${progressHtml}
         `;
 
@@ -1495,6 +1511,111 @@ function setupFileDropZone() {
 
 
 // --------------------------------------------------
+// Panel-Navigation (Swipe / Pfeile / Punkte / Tastatur)
+// --------------------------------------------------
+
+function setupPanelNavigation() {
+
+    const panelsContainer = document.getElementById("panels");
+    const dotsContainer = document.getElementById("panel-dots");
+    const prevButton = document.getElementById("panel-prev");
+    const nextButton = document.getElementById("panel-next");
+
+    if (!panelsContainer || !dotsContainer || !prevButton || !nextButton) {
+        console.warn("Panel-Navigation: benötigte Elemente fehlen im HTML.");
+        return;
+    }
+
+    const panels = Array.from(panelsContainer.querySelectorAll(".panel"));
+
+    panels.forEach((panel, index) => {
+
+        const dot = document.createElement("button");
+        dot.type = "button";
+        dot.className = "panel-dot";
+        dot.setAttribute("aria-label", panel.dataset.panelLabel || `Panel ${index + 1}`);
+        dot.addEventListener("click", () => scrollToPanel(index));
+
+        dotsContainer.appendChild(dot);
+    });
+
+    const dots = Array.from(dotsContainer.querySelectorAll(".panel-dot"));
+
+    function getCurrentIndex() {
+        const width = panelsContainer.clientWidth || 1;
+        return Math.round(panelsContainer.scrollLeft / width);
+    }
+
+    function scrollToPanel(index) {
+
+        const clampedIndex = Math.max(0, Math.min(index, panels.length - 1));
+
+        panelsContainer.scrollTo({
+            left: clampedIndex * panelsContainer.clientWidth,
+            behavior: "smooth"
+        });
+    }
+
+    function updateActiveState() {
+
+        const currentIndex = getCurrentIndex();
+
+        dots.forEach((dot, index) => {
+            dot.classList.toggle("panel-dot--active", index === currentIndex);
+        });
+
+        prevButton.disabled = currentIndex === 0;
+        nextButton.disabled = currentIndex === panels.length - 1;
+    }
+
+    // Scroll-Events feuern beim Wischen sehr häufig - per
+    // requestAnimationFrame gebündelt, um nicht bei jedem Pixel
+    // Fortschritt Dots/Buttons neu zu berechnen.
+    let scrollUpdateScheduled = false;
+
+    panelsContainer.addEventListener("scroll", () => {
+
+        if (scrollUpdateScheduled) {
+            return;
+        }
+
+        scrollUpdateScheduled = true;
+
+        requestAnimationFrame(() => {
+            updateActiveState();
+            scrollUpdateScheduled = false;
+        });
+    });
+
+    window.addEventListener("resize", updateActiveState);
+
+    prevButton.addEventListener("click", () => scrollToPanel(getCurrentIndex() - 1));
+    nextButton.addEventListener("click", () => scrollToPanel(getCurrentIndex() + 1));
+
+    // Pfeiltasten nur außerhalb von Eingabefeldern abfangen, sonst
+    // könnte man z. B. im Textfeld nicht mehr mit den Pfeiltasten
+    // den Cursor bewegen.
+    document.addEventListener("keydown", (event) => {
+
+        const activeTag = document.activeElement?.tagName;
+        const isTypingContext = activeTag === "INPUT" || activeTag === "TEXTAREA";
+
+        if (isTypingContext) {
+            return;
+        }
+
+        if (event.key === "ArrowLeft") {
+            scrollToPanel(getCurrentIndex() - 1);
+        } else if (event.key === "ArrowRight") {
+            scrollToPanel(getCurrentIndex() + 1);
+        }
+    });
+
+    updateActiveState();
+}
+
+
+// --------------------------------------------------
 // Event-Listener
 // --------------------------------------------------
 
@@ -1522,5 +1643,6 @@ addClickListener("export-playlist-button", exportPlaylist);
 // --------------------------------------------------
 
 setupFileDropZone();
+setupPanelNavigation();
 handleAuthorizationCallback();
 updateLoginStatus();
