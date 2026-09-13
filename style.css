@@ -71,7 +71,7 @@ h2 {
     text-transform: uppercase;
     letter-spacing: 0.08em;
     color: #9a9aa0;
-    margin: 0 0 16px 0;
+    margin: 0;
 }
 
 
@@ -213,6 +213,12 @@ h2 {
     margin: 0 auto;
     box-shadow: 0 0 0 1px rgba(29, 185, 84, 0.08);
     transition: box-shadow 0.2s ease;
+    /* Einheitlicher Rhythmus: EIN Abstandswert zwischen allen
+       direkten Kind-Elementen einer Card, statt vieler einzelner
+       margin-Angaben auf unterschiedlichen Elementtypen. */
+    display: flex;
+    flex-direction: column;
+    gap: 22px;
 }
 
 /* Kurzer grüner Puls, der per JS ausgelöst wird, wenn eine Playlist
@@ -238,21 +244,36 @@ h2 {
    Bildschirmhöhe anpasst und Buttons nie außerhalb des sichtbaren
    Bereichs landen). */
 .card--fill {
-    display: flex;
-    flex-direction: column;
     height: 100%;
     box-sizing: border-box;
     overflow-y: auto;
 }
 
-.card--fill textarea {
+/* Gruppiert ein Label mit seinem Eingabefeld (und optional einem
+   Hinweistext) eng zusammen - unabhängig vom größeren 22px-Rhythmus
+   zwischen den Card-Abschnitten. */
+.field {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+/* Lässt eine Feldgruppe den restlichen verfügbaren Platz einnehmen
+   (aktuell: "Tracks"-Feld in "By Hand", damit sich das Textfeld der
+   Bildschirmhöhe anpasst). */
+.field--grow {
+    flex: 1 1 auto;
+    min-height: 0;
+}
+
+.field--grow textarea {
     flex: 1 1 auto;
     min-height: 70px;
 }
 
 label {
     display: block;
-    margin-bottom: 8px;
+    margin: 0;
     font-weight: 600;
     color: #f5f5f7;
 }
@@ -284,7 +305,6 @@ textarea:focus {
 textarea {
     min-height: 220px;
     resize: vertical;
-    margin-bottom: 16px;
 }
 
 button {
@@ -323,24 +343,6 @@ button:focus-visible {
     outline-offset: 2px;
 }
 
-/* Weiße Button-Variante (Connect, Check tracks, Build playlist) -
-   hebt sich bewusst vom grünen Standard-Button ab. */
-.button-white {
-    background: #f5f5f7;
-    color: #0a0a0c;
-}
-
-.button-white:hover {
-    background: #ffffff;
-    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.6), 0 0 20px rgba(255, 255, 255, 0.25);
-}
-
-.button-white:disabled {
-    background: #d8d8db;
-    color: #8a8a90;
-    box-shadow: none;
-}
-
 /* Zurückhaltende Sekundär-Variante (z. B. "Clear all"). */
 .button-secondary {
     background: #1c1c1f;
@@ -373,12 +375,10 @@ button:focus-visible {
 }
 
 #login-status {
-    margin-bottom: 16px;
     color: #9a9aa0;
 }
 
 #validation-result {
-    margin-top: 16px;
     font-size: 16px;
     line-height: 1.6;
     color: #d4d4d8;
@@ -413,10 +413,6 @@ progress::-moz-progress-bar {
     border-radius: 6px;
 }
 
-.playlist-progress {
-    margin: 4px 0 16px 0;
-}
-
 .file-queue-item__progress {
     flex: 1 1 100%;
     margin-top: 6px;
@@ -435,7 +431,6 @@ progress::-moz-progress-bar {
     font-size: 15px;
     font-weight: 500;
     color: #d4d4d8;
-    margin: 14px 0 4px 0;
     cursor: pointer;
 }
 
@@ -457,7 +452,6 @@ progress::-moz-progress-bar {
     padding: 40px 16px;
     text-align: center;
     cursor: pointer;
-    margin-bottom: 16px;
     background: #0e0e10;
     transition: background-color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
 }
@@ -500,10 +494,6 @@ progress::-moz-progress-bar {
     color: #1db954;
 }
 
-.file-queue-empty {
-    margin: 0 0 16px 0;
-}
-
 
 /* --------------------------------------------------
    Warteschlange der hochgeladenen Dateien
@@ -512,7 +502,7 @@ progress::-moz-progress-bar {
 .file-queue-list {
     list-style: none;
     padding: 0;
-    margin: 0 0 8px 0;
+    margin: 0;
 }
 
 @keyframes fileItemEnter {
@@ -626,7 +616,6 @@ progress::-moz-progress-bar {
     display: flex;
     gap: 12px;
     flex-wrap: wrap;
-    margin-bottom: 16px;
 }
 
 .file-queue-buttons button {
@@ -635,7 +624,6 @@ progress::-moz-progress-bar {
 }
 
 #file-playlist-results {
-    margin-top: 12px;
     font-size: 15px;
     color: #9a9aa0;
     line-height: 1.6;
