@@ -247,7 +247,7 @@ async function refreshAccessToken() {
 
     } catch (error) {
 
-        console.error("Refresh fehlgeschlagen:", error);
+        console.error("Refresh failed:", error);
         return null;
     }
 }
@@ -559,7 +559,7 @@ async function exportPlaylist() {
     const playlistId = extractPlaylistId(input);
 
     if (!playlistId) {
-        result.textContent = "That doesn't look like a playlist link, URI, or ID.";
+        result.textContent = "That doesn't look like a playlist link.";
         return;
     }
 
@@ -1225,7 +1225,7 @@ async function addFilesToQueue(fileList) {
         try {
             content = await file.text();
         } catch (error) {
-            console.error(`Datei "${file.name}" konnte nicht gelesen werden:`, error);
+            console.error(`Datei "${file.name}" d:`, error);
             continue;
         }
 
@@ -1462,7 +1462,7 @@ function setupFileDropZone() {
     const fileInput = document.getElementById("file-input");
 
     if (!dropZone || !fileInput) {
-        console.warn("Drop-Zone-Elemente wurden im HTML nicht gefunden - Datei-Upload ist deaktiviert.");
+        console.warn("No drop zone elements were found in the HTML – file upload is disabled.");
         return;
     }
 
@@ -1633,7 +1633,7 @@ function addClickListener(elementId, handler) {
     const element = document.getElementById(elementId);
 
     if (!element) {
-        console.warn(`Element mit id="${elementId}" wurde im HTML nicht gefunden.`);
+        console.warn(`The Element with id="${elementId}" was not found in the HTML.`);
         return;
     }
 
