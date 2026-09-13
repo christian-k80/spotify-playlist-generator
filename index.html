@@ -11,177 +11,196 @@
 
 <body>
 
-    <main class="container">
-
+    <header class="app-header">
         <h1>Spotify Playlist Generator</h1>
-
         <p class="intro">
             Tracks in. Playlist out. No clicking around in the Spotify app.
         </p>
+    </header>
 
-        <section class="card">
+    <div class="panel-viewport">
 
-            <h2>Spotify</h2>
+        <button type="button" id="panel-prev" class="panel-arrow panel-arrow--prev" aria-label="Previous panel">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M15 18l-6-6 6-6"></path>
+            </svg>
+        </button>
 
-            <p id="login-status" aria-live="polite">
-                Not connected yet.
-            </p>
+        <main id="panels" class="panels">
 
-            <button id="login-button" class="button-white" data-connected="false">
-                <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                    <path d="M10 13a5 5 0 0 0 7.07 0l2.83-2.83a5 5 0 0 0-7.07-7.07l-1.5 1.5"></path>
-                    <path d="M14 11a5 5 0 0 0-7.07 0L4.1 13.83a5 5 0 0 0 7.07 7.07l1.5-1.5"></path>
-                </svg>
-                Connect with Spotify
-            </button>
+            <section class="card panel" data-panel-label="Spotify">
 
-        </section>
+                <h2>Spotify</h2>
 
-        <section class="card">
-
-            <h2>From Files</h2>
-
-            <p class="hint">
-                Drop one or more .txt files here. One file, one playlist –
-                the filename becomes the playlist name automatically.
-                No typing, no renaming.
-            </p>
-
-            <div id="file-drop-zone" class="drop-zone" tabindex="0" role="button" aria-label="Upload TXT files">
-
-                <svg class="dropzone-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                    <path d="M12 3v12"></path>
-                    <path d="M7 8l5-5 5 5"></path>
-                    <path d="M5 21h14"></path>
-                </svg>
-
-                <p>
-                    Drop files here<br>
-                    or click to browse
+                <p id="login-status" aria-live="polite">
+                    Not connected yet.
                 </p>
 
-                <input
-                    type="file"
-                    id="file-input"
-                    accept=".txt,text/plain"
-                    multiple
-                    hidden
-                >
-            </div>
-
-            <p id="file-queue-empty" class="hint file-queue-empty">
-                No files in the queue yet — drop some above and they'll show up here.
-            </p>
-
-            <ul id="file-queue-list" class="file-queue-list"></ul>
-
-            <label class="toggle-row" for="files-public-toggle">
-                <input type="checkbox" id="files-public-toggle">
-                Make playlists public
-            </label>
-
-            <div class="file-queue-buttons">
-                <button id="clear-file-queue-button" class="button-secondary" hidden>
+                <button id="login-button" class="button-white" data-connected="false">
                     <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                        <path d="M3 6h18"></path>
-                        <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-                        <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path>
+                        <path d="M10 13a5 5 0 0 0 7.07 0l2.83-2.83a5 5 0 0 0-7.07-7.07l-1.5 1.5"></path>
+                        <path d="M14 11a5 5 0 0 0-7.07 0L4.1 13.83a5 5 0 0 0 7.07 7.07l1.5-1.5"></path>
                     </svg>
-                    Clear all
+                    Connect with Spotify
                 </button>
 
-                <button id="create-playlists-from-files-button" hidden>
-                    Create playlists
+            </section>
+
+            <section class="card panel" data-panel-label="From Files">
+
+                <h2>From Files</h2>
+
+                <p class="hint">
+                    Drop one or more .txt files here. One file, one playlist –
+                    the filename becomes the playlist name automatically.
+                    No typing, no renaming.
+                </p>
+
+                <div id="file-drop-zone" class="drop-zone" tabindex="0" role="button" aria-label="Upload TXT files">
+
+                    <svg class="dropzone-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M12 3v12"></path>
+                        <path d="M7 8l5-5 5 5"></path>
+                        <path d="M5 21h14"></path>
+                    </svg>
+
+                    <p>
+                        Drop files here<br>
+                        or click to browse
+                    </p>
+
+                    <input
+                        type="file"
+                        id="file-input"
+                        accept=".txt,text/plain"
+                        multiple
+                        hidden
+                    >
+                </div>
+
+                <p id="file-queue-empty" class="hint file-queue-empty">
+                    No files in the queue yet — drop some above and they'll show up here.
+                </p>
+
+                <ul id="file-queue-list" class="file-queue-list"></ul>
+
+                <label class="toggle-row" for="files-public-toggle">
+                    <input type="checkbox" id="files-public-toggle">
+                    Make playlists public
+                </label>
+
+                <div class="file-queue-buttons">
+                    <button id="clear-file-queue-button" class="button-secondary" hidden>
+                        <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <path d="M3 6h18"></path>
+                            <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                            <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path>
+                        </svg>
+                        Clear all
+                    </button>
+
+                    <button id="create-playlists-from-files-button" hidden>
+                        Create playlists
+                    </button>
+                </div>
+
+                <div id="file-playlist-results" aria-live="polite"></div>
+
+            </section>
+
+            <section class="card panel" data-panel-label="By Hand">
+
+                <h2>By Hand</h2>
+
+                <label for="playlist-name">
+                    Playlist Name
+                </label>
+
+                <input
+                    type="text"
+                    id="playlist-name"
+                    value="My Next Playlist"
+                    placeholder="What should it be called?"
+                >
+
+                <label class="toggle-row" for="playlist-public-toggle">
+                    <input type="checkbox" id="playlist-public-toggle">
+                    Make playlist public
+                </label>
+
+                <label for="track-input">
+                    Tracks
+                </label>
+
+                <p class="hint">
+                    Spotify URIs, URLs, or track IDs. One line, one track.
+                    That's all it takes.
+                </p>
+
+                <textarea
+                    id="track-input"
+                    placeholder="spotify:track:1EpSEIbldNM7SQ6koEQqWT&#10;spotify:track:..."
+                ></textarea>
+
+                <button id="validate-button" class="button-white">
+                    Check tracks
                 </button>
-            </div>
 
-            <div id="file-playlist-results" aria-live="polite"></div>
+                <div id="validation-result" aria-live="polite"></div>
 
-        </section>
+                <button id="create-playlist-button" class="button-white">
+                    Build playlist
+                </button>
 
-        <section class="card">
+                <progress id="playlist-progress" class="playlist-progress" value="0" max="100" hidden></progress>
 
-            <h2>By Hand</h2>
+                <div id="playlist-result" aria-live="polite"></div>
 
-            <label for="playlist-name">
-                Playlist Name
-            </label>
+            </section>
 
-            <input
-                type="text"
-                id="playlist-name"
-                value="My Next Playlist"
-                placeholder="What should it be called?"
-            >
+            <section class="card panel" data-panel-label="Export">
 
-            <label class="toggle-row" for="playlist-public-toggle">
-                <input type="checkbox" id="playlist-public-toggle">
-                Make playlist public
-            </label>
+                <h2>Export</h2>
 
-            <label for="track-input">
-                Tracks
-            </label>
+                <p class="hint">
+                    Paste a playlist link, URI, or ID to export its tracks as a
+                    semicolon-separated .txt file with the data Spotify's API
+                    still provides. Audio features, track/album popularity, and
+                    record label were removed from the API and can't be
+                    included.
+                </p>
 
-            <p class="hint">
-                Spotify URIs, URLs, or track IDs. One line, one track.
-                That's all it takes.
-            </p>
+                <label for="export-playlist-input">
+                    Playlist URL, URI, or ID
+                </label>
 
-            <textarea
-                id="track-input"
-                placeholder="spotify:track:1EpSEIbldNM7SQ6koEQqWT&#10;spotify:track:..."
-            ></textarea>
+                <input
+                    type="text"
+                    id="export-playlist-input"
+                    placeholder="https://open.spotify.com/playlist/..."
+                >
 
-            <button id="validate-button" class="button-white">
-                Check tracks
-            </button>
+                <button id="export-playlist-button" class="button-white">
+                    Export playlist
+                </button>
 
-            <div id="validation-result" aria-live="polite"></div>
+                <progress id="export-progress" class="playlist-progress" value="0" max="100" hidden></progress>
 
-            <button id="create-playlist-button" class="button-white">
-                Build playlist
-            </button>
+                <div id="export-result" aria-live="polite"></div>
 
-            <progress id="playlist-progress" class="playlist-progress" value="0" max="100" hidden></progress>
+            </section>
 
-            <div id="playlist-result" aria-live="polite"></div>
+        </main>
 
-        </section>
+        <button type="button" id="panel-next" class="panel-arrow panel-arrow--next" aria-label="Next panel">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M9 18l6-6-6-6"></path>
+            </svg>
+        </button>
 
-        <section class="card">
+    </div>
 
-            <h2>Export</h2>
-
-            <p class="hint">
-                Paste a playlist link, URI, or ID to export its tracks as a
-                semicolon-separated .txt file with the data Spotify's API
-                still provides. Audio features, track/album popularity, and
-                record label were removed from the API and can't be
-                included.
-            </p>
-
-            <label for="export-playlist-input">
-                Playlist URL, URI, or ID
-            </label>
-
-            <input
-                type="text"
-                id="export-playlist-input"
-                placeholder="https://open.spotify.com/playlist/..."
-            >
-
-            <button id="export-playlist-button" class="button-white">
-                Export playlist
-            </button>
-
-            <progress id="export-progress" class="playlist-progress" value="0" max="100" hidden></progress>
-
-            <div id="export-result" aria-live="polite"></div>
-
-        </section>
-
-    </main>
+    <nav class="panel-dots" id="panel-dots" aria-label="Panel navigation"></nav>
 
     <script type="module" src="js/app.js"></script>
 
