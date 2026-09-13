@@ -259,17 +259,16 @@ h2 {
     gap: 8px;
 }
 
-/* Lässt eine Feldgruppe den restlichen verfügbaren Platz einnehmen
-   (aktuell: "Tracks"-Feld in "By Hand", damit sich das Textfeld der
-   Bildschirmhöhe anpasst). */
-.field--grow {
-    flex: 1 1 auto;
-    min-height: 0;
-}
-
+/* Lässt das Tracks-Textfeld direkt anhand der sichtbaren
+   Bildschirmhöhe skalieren, statt über verschachteltes
+   Flex-Wachstum berechnet zu werden - dadurch keine Überlappung
+   mehr, falls die Flex-Berechnung die Box kleiner ansetzt als ihr
+   tatsächlicher Inhalt braucht. */
 .field--grow textarea {
-    flex: 1 1 auto;
-    min-height: 70px;
+    height: 32vh;
+    height: 32dvh;
+    min-height: 90px;
+    max-height: 340px;
 }
 
 label {
