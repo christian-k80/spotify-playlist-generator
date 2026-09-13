@@ -230,6 +230,23 @@ h2 {
     animation: cardPulse 0.9s ease-out;
 }
 
+/* Variante für Cards, deren Inhalt die volle Panel-Höhe ausnutzen
+   soll (aktuell: "By Hand", damit das Textfeld sich der jeweiligen
+   Bildschirmhöhe anpasst und Buttons nie außerhalb des sichtbaren
+   Bereichs landen). */
+.card--fill {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    box-sizing: border-box;
+    overflow-y: auto;
+}
+
+.card--fill textarea {
+    flex: 1 1 auto;
+    min-height: 70px;
+}
+
 label {
     display: block;
     margin-bottom: 8px;
