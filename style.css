@@ -191,8 +191,11 @@ h2 {
     background: #3a3a40;
 }
 
-.panel-dot--active {
-    background: #1db954;
+.panel-dot--active,
+.panel-dot--active:hover,
+.panel-dot--active:focus-visible,
+.panel-dot--active:active {
+    background: #1db954 !important;
     transform: scale(1.3);
 }
 
