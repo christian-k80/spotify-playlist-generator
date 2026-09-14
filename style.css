@@ -306,7 +306,7 @@ textarea::placeholder {
 input:focus,
 textarea:focus {
     outline: none;
-    border-color: #1db954;
+    border-color: #1ED760;
     box-shadow: 0 0 0 3px rgba(29, 185, 84, 0.2);
 }
 
@@ -481,7 +481,7 @@ progress::-moz-progress-bar {
 }
 
 .drop-zone--active {
-    border-color: #1db954;
+    border-color: #1ED760;
     background: rgba(29, 185, 84, 0.06);
     box-shadow: 0 0 0 1px #1db954, 0 0 32px rgba(29, 185, 84, 0.25);
 }
