@@ -19,12 +19,7 @@ const SCOPES = [
 // für den Export.
 const EXPORT_PAGE_SIZE = 100;
 
-// Spaltenreihenfolge der exportierten TXT-Datei. "Popularity",
-// "Record Label" und alle Audio-Feature-Spalten (Danceability,
-// Energy, Key, Loudness, Mode, Speechiness, Acousticness,
-// Instrumentalness, Liveness, Valence, Tempo) fehlen bewusst - die
-// zugehörigen Spotify-Endpunkte/Felder wurden 2024/2026 entfernt
-// und liefern für keine App mehr Daten.
+// Spaltenreihenfolge der exportierten TXT-Datei.
 const EXPORT_COLUMNS = [
     "Track URI",
     "Track Name",
@@ -247,7 +242,7 @@ async function refreshAccessToken() {
 
     } catch (error) {
 
-        console.error("Refresh fehlgeschlagen:", error);
+        console.error("Refresh failed:", error);
         return null;
     }
 }
@@ -338,9 +333,7 @@ async function handleAuthorizationCallback() {
 }
 
 
-// Lädt das Profil des aktuell verbundenen Nutzers. display_name ist
-// ohne zusätzlichen Scope verfügbar (im Gegensatz zu z. B. country
-// oder email, die user-read-private/-email voraussetzen).
+// Lädt das Profil des aktuell verbundenen Nutzers.
 async function fetchCurrentUserProfile() {
 
     try {
@@ -358,7 +351,7 @@ async function fetchCurrentUserProfile() {
 
     } catch (error) {
 
-        console.error("Profil konnte nicht geladen werden:", error);
+        console.error("Profile could not be loaded:", error);
         return null;
     }
 }
@@ -804,7 +797,7 @@ async function exportPlaylist() {
     const playlistId = extractPlaylistId(input);
 
     if (!playlistId) {
-        result.textContent = "That doesn't look like a playlist link, URI, or ID.";
+        result.textContent = "That doesn't look like a playlist link.";
         return;
     }
 
@@ -1065,7 +1058,7 @@ async function togglePlaylistTracks(playlistId) {
 
         } catch (error) {
 
-            console.error(`Titel für Playlist "${entry.name}" konnten nicht geladen werden:`, error);
+            console.error(`Tracks for the playlist "${entry.name}" could not be loaded:`, error);
 
             entry.tracksError = error.message || "Could not load tracks.";
 
@@ -1118,7 +1111,7 @@ async function exportMyPlaylist(playlistId) {
 
     } catch (error) {
 
-        console.error(`Export für Playlist "${entry.name}" fehlgeschlagen:`, error);
+        console.error(`Export for Playlist "${entry.name}" failed:`, error);
 
         entry.status = "error";
         entry.errorMessage = error.message || "Unknown error";
@@ -1644,7 +1637,7 @@ async function addFilesToQueue(fileList) {
         try {
             content = await file.text();
         } catch (error) {
-            console.error(`Datei "${file.name}" konnte nicht gelesen werden:`, error);
+            console.error(`The file "${file.name}" could not be read:`, error);
             continue;
         }
 
@@ -1881,7 +1874,7 @@ function setupFileDropZone() {
     const fileInput = document.getElementById("file-input");
 
     if (!dropZone || !fileInput) {
-        console.warn("Drop-Zone-Elemente wurden im HTML nicht gefunden - Datei-Upload ist deaktiviert.");
+        console.warn("No drop zone elements were found in the HTML – file upload is disabled.");
         return;
     }
 
@@ -1941,7 +1934,7 @@ function setupPanelNavigation() {
     const nextButton = document.getElementById("panel-next");
 
     if (!panelsContainer || !dotsContainer || !prevButton || !nextButton) {
-        console.warn("Panel-Navigation: benötigte Elemente fehlen im HTML.");
+        console.warn("Panel navigation: the required elements are missing from the HTML.");
         return;
     }
 
@@ -2052,7 +2045,7 @@ function addClickListener(elementId, handler) {
     const element = document.getElementById(elementId);
 
     if (!element) {
-        console.warn(`Element mit id="${elementId}" wurde im HTML nicht gefunden.`);
+        console.warn(`The element with id="${elementId}" was not found in the HTML.`);
         return;
     }
 
