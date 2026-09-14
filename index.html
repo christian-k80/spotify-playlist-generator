@@ -51,12 +51,11 @@
             <section class="panel" data-panel-label="From Files">
               <div class="card">
 
-                <h2>From Files</h2>
+                <h2>Import from File(s)</h2>
 
                 <p class="hint">
                     Drop one or more .txt files here. One file, one playlist –
                     the filename becomes the playlist name automatically.
-                    No typing, no renaming.
                 </p>
 
                 <div id="file-drop-zone" class="drop-zone" tabindex="0" role="button" aria-label="Upload TXT files">
@@ -115,7 +114,7 @@
             <section class="panel" data-panel-label="By Hand">
               <div class="card card--fill">
 
-                <h2>By Hand</h2>
+                <h2>Import from Spotify ID´s</h2>
 
                 <div class="field">
                     <label for="playlist-name">
@@ -125,7 +124,6 @@
                     <input
                         type="text"
                         id="playlist-name"
-                        value="My Next Playlist"
                         placeholder="What should it be called?"
                     >
                 </div>
@@ -141,7 +139,7 @@
                     </label>
 
                     <p class="hint">
-                        Spotify URIs, URLs, or track IDs. One line, one track.
+                        Spotify ID´s. One line, one track.
                         That's all it takes.
                     </p>
 
@@ -178,16 +176,13 @@
                 <h2>Export</h2>
 
                 <p class="hint">
-                    Paste a playlist link, URI, or ID to export its tracks as a
-                    semicolon-separated .txt file with the data Spotify's API
-                    still provides. Audio features, track/album popularity, and
-                    record label were removed from the API and can't be
-                    included.
+                    Paste a playlist link to export its tracks as a
+                    .txt file with the data Spotify's API provides. 
                 </p>
 
                 <div class="field">
                     <label for="export-playlist-input">
-                        Playlist URL, URI, or ID
+                        Playlist ID
                     </label>
 
                     <input
@@ -214,8 +209,7 @@
                 <h2>My Playlists</h2>
 
                 <p class="hint">
-                    All playlists on your account. Export any of them the
-                    same way as above - semicolon-separated .txt, one click.
+                    All playlists in your account to export.
                 </p>
 
                 <button id="load-playlists-button">
