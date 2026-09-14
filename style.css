@@ -271,6 +271,15 @@ h2 {
     max-height: 340px;
 }
 
+/* Gruppiert zusammengehörige Aktionen enger als der allgemeine
+   22px-Card-Rhythmus (aktuell: "Check tracks" -> Ergebnis ->
+   "Build playlist" in "By Hand"). */
+.button-group {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
 label {
     display: block;
     margin: 0;
@@ -613,6 +622,34 @@ progress::-moz-progress-bar {
 .file-queue-item__link:hover {
     text-decoration: underline;
     box-shadow: none;
+}
+
+/* Aufklappbare Titel-Vorschau innerhalb eines Playlist-Eintrags. */
+.track-preview {
+    flex: 1 1 100%;
+    margin-top: 10px;
+    max-height: 240px;
+    overflow-y: auto;
+    background: #0a0a0c;
+    border: 1px solid #232326;
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-size: 14px;
+    line-height: 1.6;
+    color: #d4d4d8;
+}
+
+.track-preview--error {
+    color: #ff8a6a;
+}
+
+.track-preview-list {
+    margin: 0;
+    padding-left: 20px;
+}
+
+.track-preview-list li {
+    padding: 2px 0;
 }
 
 .file-queue-buttons {
