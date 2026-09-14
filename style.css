@@ -266,7 +266,7 @@ h2 {
    Bedarf manuell vergrößern. */
 .field--grow textarea {
     height: 60px;
-    min-height: 48px;
+    min-height: 60px;
     max-height: 120px;
 }
 
