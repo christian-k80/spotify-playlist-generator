@@ -14,7 +14,7 @@
     <header class="app-header">
         <h1>Spotify Playlist Generator</h1>
         <p class="intro">
-            Tracks in. Playlist out. No clicking around.
+            Tracks in. Playlist out. No clicking around in the Spotify app.
         </p>
     </header>
 
@@ -51,7 +51,7 @@
             <section class="panel" data-panel-label="From Files">
               <div class="card">
 
-                <h2>Import From File(s)</h2>
+                <h2>From Files</h2>
 
                 <p class="hint">
                     Drop one or more .txt files here. One file, one playlist –
@@ -89,7 +89,7 @@
 
                 <label class="toggle-row" for="files-public-toggle">
                     <input type="checkbox" id="files-public-toggle">
-                    Make playlist(s) public
+                    Make playlists public
                 </label>
 
                 <div class="file-queue-buttons">
@@ -103,7 +103,7 @@
                     </button>
 
                     <button id="create-playlists-from-files-button" hidden>
-                        Create playlist(s)
+                        Create playlists
                     </button>
                 </div>
 
@@ -115,7 +115,7 @@
             <section class="panel" data-panel-label="By Hand">
               <div class="card card--fill">
 
-                <h2>Import from Spotify ID`s</h2>
+                <h2>By Hand</h2>
 
                 <div class="field">
                     <label for="playlist-name">
@@ -141,13 +141,13 @@
                     </label>
 
                     <p class="hint">
-                        Spotify track IDs. One line, one track.
+                        Spotify URIs, URLs, or track IDs. One line, one track.
                         That's all it takes.
                     </p>
 
                     <textarea
                         id="track-input"
-                        placeholder="spotify:track:id"
+                        placeholder="spotify:track:1EpSEIbldNM7SQ6koEQqWT&#10;spotify:track:..."
                     ></textarea>
                 </div>
 
@@ -171,16 +171,19 @@
             <section class="panel" data-panel-label="Export">
               <div class="card">
 
-                <h2>Export Spotify playlist</h2>
+                <h2>Export</h2>
 
                 <p class="hint">
-                    Paste a playlist link to export its tracks as a
-                    .txt file.
+                    Paste a playlist link, URI, or ID to export its tracks as a
+                    semicolon-separated .txt file with the data Spotify's API
+                    still provides. Audio features, track/album popularity, and
+                    record label were removed from the API and can't be
+                    included.
                 </p>
 
                 <div class="field">
                     <label for="export-playlist-input">
-                        Playlist URL
+                        Playlist URL, URI, or ID
                     </label>
 
                     <input
@@ -197,6 +200,27 @@
                 <progress id="export-progress" class="playlist-progress" value="0" max="100" hidden></progress>
 
                 <div id="export-result" aria-live="polite"></div>
+
+              </div>
+            </section>
+
+            <section class="panel" data-panel-label="My Playlists">
+              <div class="card">
+
+                <h2>My Playlists</h2>
+
+                <p class="hint">
+                    All playlists on your account. Export any of them the
+                    same way as above - semicolon-separated .txt, one click.
+                </p>
+
+                <button id="load-playlists-button">
+                    Load my playlists
+                </button>
+
+                <ul id="my-playlists-list" class="file-queue-list"></ul>
+
+                <div id="my-playlists-result" aria-live="polite"></div>
 
               </div>
             </section>
