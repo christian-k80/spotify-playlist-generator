@@ -50,6 +50,23 @@ body {
     margin-right: auto;
 }
 
+.header {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 8px;
+}
+
+.logo {
+    width: 56px;
+    height: 56px;
+    object-fit: contain;
+}
+
+.header h1 {
+    margin: 0;
+}
+
 h1 {
     font-size: 40px;
     font-weight: 800;
