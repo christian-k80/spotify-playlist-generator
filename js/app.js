@@ -635,8 +635,16 @@ async function runPlaylistExport(playlistId, { onStatus, onProgress } = {}) {
         total = itemsData.total ?? total ?? 0;
 
         for (const item of itemsData.items || []) {
-            if (item.track) {
-                tracks.push(item.track);
+
+            // Seit der Spotify-API-Umstellung von Februar 2026 heißt
+            // das Feld pro Eintrag "item" statt "track" (analog zur
+            // Endpunkt-Umbenennung /tracks -> /items). "track" wurde
+            // übergangsweise noch mitgeschickt, daher hier beide
+            // Varianten abfangen.
+            const trackData = item.item ?? item.track;
+
+            if (trackData) {
+                tracks.push(trackData);
             }
         }
 
@@ -760,8 +768,13 @@ async function loadPlaylistTracksList(playlistId, onStatus) {
         total = data.total ?? total ?? 0;
 
         for (const item of data.items || []) {
-            if (item.track) {
-                tracks.push(item.track);
+
+            // Siehe Kommentar in runPlaylistExport: Feld heißt seit
+            // Februar 2026 "item" statt "track".
+            const trackData = item.item ?? item.track;
+
+            if (trackData) {
+                tracks.push(trackData);
             }
         }
 
@@ -878,7 +891,7 @@ async function loadMyPlaylists() {
                 collected.push({
                     id: item.id,
                     name: item.name || "Untitled playlist",
-                    trackCount: item.tracks?.total ?? item.items?.total ?? null,
+                    trackCount: item.items?.total ?? item.tracks?.total ?? null,
                     status: "idle"
                 });
             }
