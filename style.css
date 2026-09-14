@@ -570,6 +570,7 @@ progress::-moz-progress-bar {
 }
 
 .file-queue-item__remove,
+.file-queue-item__action,
 .file-queue-item__link {
     width: auto;
     min-height: auto;
@@ -581,7 +582,8 @@ progress::-moz-progress-bar {
     align-items: center;
 }
 
-.file-queue-item__remove {
+.file-queue-item__remove,
+.file-queue-item__action {
     background: #1c1c1f;
     color: #f5f5f7;
     border: 1px solid #2c2c30;
@@ -595,7 +597,8 @@ progress::-moz-progress-bar {
     margin: 0;
 }
 
-.file-queue-item__remove:hover {
+.file-queue-item__remove:hover,
+.file-queue-item__action:hover {
     background: #232326;
     box-shadow: none;
 }
