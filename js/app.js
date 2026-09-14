@@ -728,6 +728,53 @@ async function runPlaylistExport(playlistId, { onStatus, onProgress } = {}) {
 }
 
 
+// Lädt nur die Titel einer Playlist (ohne Genre-Abgleich, der ist
+// für eine reine Vorschau nicht nötig und würde unnötig verzögern).
+async function loadPlaylistTracksList(playlistId, onStatus) {
+
+    const notifyStatus = (text) => { if (onStatus) onStatus(text); };
+
+    const notifyWaiting = (waitSeconds) => {
+        notifyStatus(`Spotify's hitting the brakes – waiting ${waitSeconds}s...`);
+    };
+
+    const tracks = [];
+    let offset = 0;
+    let total = null;
+
+    do {
+
+        const response = await fetchSpotifyApi(
+            `https://api.spotify.com/v1/playlists/${playlistId}/items?limit=${EXPORT_PAGE_SIZE}&offset=${offset}`,
+            { method: "GET" },
+            notifyWaiting
+        );
+
+        if (!response.ok) {
+            throw new Error(
+                await buildApiErrorMessage(response, "Could not load tracks")
+            );
+        }
+
+        const data = await response.json();
+        total = data.total ?? total ?? 0;
+
+        for (const item of data.items || []) {
+            if (item.track) {
+                tracks.push(item.track);
+            }
+        }
+
+        offset += EXPORT_PAGE_SIZE;
+
+        notifyStatus(`Loading tracks... (${tracks.length} / ${total ?? "?"})`);
+
+    } while (total !== null && offset < total);
+
+    return tracks;
+}
+
+
 // UI-Wrapper für die "Export"-Karte (Playlist per Link/URI/ID).
 async function exportPlaylist() {
 
@@ -909,6 +956,14 @@ function renderMyPlaylists() {
 
         if (entry.status !== "creating") {
 
+            const viewButton = document.createElement("button");
+            viewButton.type = "button";
+            viewButton.className = "file-queue-item__action";
+            viewButton.textContent = entry.expanded ? "Hide tracks" : "Show tracks";
+            viewButton.addEventListener("click", () => togglePlaylistTracks(entry.id));
+
+            item.appendChild(viewButton);
+
             const exportButton = document.createElement("button");
             exportButton.type = "button";
             exportButton.className = "file-queue-item__action";
@@ -918,8 +973,102 @@ function renderMyPlaylists() {
             item.appendChild(exportButton);
         }
 
+        if (entry.expanded) {
+
+            const preview = document.createElement("div");
+            preview.className = "track-preview";
+
+            if (entry.tracksLoading) {
+
+                preview.textContent = entry.tracksStatus || "Loading tracks...";
+
+            } else if (entry.tracksError) {
+
+                preview.classList.add("track-preview--error");
+                preview.textContent = entry.tracksError;
+
+            } else if (entry.tracks) {
+
+                if (entry.tracks.length === 0) {
+
+                    preview.textContent = "This playlist has no tracks.";
+
+                } else {
+
+                    const trackList = document.createElement("ol");
+                    trackList.className = "track-preview-list";
+
+                    for (const track of entry.tracks) {
+
+                        const trackItem = document.createElement("li");
+                        const artistNames = (track.artists || [])
+                            .map(artist => artist.name)
+                            .join(", ");
+
+                        trackItem.textContent = artistNames ?
+                            `${track.name || "Unknown track"} — ${artistNames}` :
+                            (track.name || "Unknown track");
+
+                        trackList.appendChild(trackItem);
+                    }
+
+                    preview.appendChild(trackList);
+                }
+            }
+
+            item.appendChild(preview);
+        }
+
         listElement.appendChild(item);
     }
+}
+
+
+// Klappt die Titel-Vorschau einer Playlist auf/zu und lädt die
+// Titel beim ersten Öffnen nach (danach zwischengespeichert im
+// entry, kein erneuter Request beim nochmaligen Auf-/Zuklappen).
+async function togglePlaylistTracks(playlistId) {
+
+    const entry = myPlaylists.find(playlist => playlist.id === playlistId);
+
+    if (!entry) {
+        return;
+    }
+
+    entry.expanded = !entry.expanded;
+
+    if (entry.expanded && !entry.tracks && !entry.tracksLoading) {
+
+        entry.tracksLoading = true;
+        entry.tracksError = null;
+        renderMyPlaylists();
+
+        try {
+
+            entry.tracks = await loadPlaylistTracksList(playlistId, (text) => {
+                entry.tracksStatus = text;
+                renderMyPlaylists();
+            });
+
+        } catch (error) {
+
+            console.error(`Titel für Playlist "${entry.name}" konnten nicht geladen werden:`, error);
+
+            entry.tracksError = error.message || "Could not load tracks.";
+
+            if (error.message?.includes("Session expired") ||
+                error.message?.includes("Not connected")) {
+
+                await updateLoginStatus();
+            }
+
+        } finally {
+
+            entry.tracksLoading = false;
+        }
+    }
+
+    renderMyPlaylists();
 }
 
 
