@@ -259,16 +259,15 @@ h2 {
     gap: 8px;
 }
 
-/* Lässt das Tracks-Textfeld direkt anhand der sichtbaren
-   Bildschirmhöhe skalieren, statt über verschachteltes
-   Flex-Wachstum berechnet zu werden - dadurch keine Überlappung
-   mehr, falls die Flex-Berechnung die Box kleiner ansetzt als ihr
-   tatsächlicher Inhalt braucht. */
+/* Kompakt gehalten, damit die komplette "By Hand"-Card ohne
+   Scrollen auf den Bildschirm passt - das Feld muss nur eine Zeile
+   ohne unnötigen Leerraum zeigen, nicht mehrere Beispielzeilen.
+   Per Resize-Griff (siehe Basis-textarea-Regel) lässt es sich bei
+   Bedarf manuell vergrößern. */
 .field--grow textarea {
-    height: 32vh;
-    height: 32dvh;
-    min-height: 90px;
-    max-height: 340px;
+    height: 60px;
+    min-height: 48px;
+    max-height: 120px;
 }
 
 /* Gruppiert zusammengehörige Aktionen enger als der allgemeine
