@@ -6,6 +6,7 @@
 
     <title>Spotify Playlist Generator</title>
 
+    <link rel="icon" href="logo.png">
     <link rel="stylesheet" href="style.css">
 </head>
 
@@ -17,6 +18,8 @@
                 src="logo.png"
                 alt="Logo"
                 class="logo"
+                width="70"
+                height="70"
             >
             <h1>Spotify Playlist Generator</h1>
         <p class="intro">
@@ -223,6 +226,15 @@
                 </button>
 
                 <ul id="my-playlists-list" class="file-queue-list"></ul>
+
+                <label class="toggle-row" for="select-all-playlists-toggle">
+                    <input type="checkbox" id="select-all-playlists-toggle">
+                    Select all
+                </label>
+
+                <button id="export-selected-playlists-button" hidden>
+                    Export selected
+                </button>
 
                 <div id="my-playlists-result" aria-live="polite"></div>
 
