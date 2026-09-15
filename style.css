@@ -325,7 +325,7 @@ input:focus,
 textarea:focus {
     outline: none;
     border-color: #1ED760;
-    box-shadow: 0 0 0 3px rgba(29, 185, 84, 0.2);
+    box-shadow: 0 0 0 3px rgba(30, 215, 96, 0.2);
 }
 
 textarea {
@@ -460,7 +460,8 @@ progress::-moz-progress-bar {
     cursor: pointer;
 }
 
-.toggle-row input[type="checkbox"] {
+.toggle-row input[type="checkbox"],
+.file-queue-item__select {
     width: auto;
     accent-color: #1db954;
     transform: scale(1.2);
@@ -500,8 +501,8 @@ progress::-moz-progress-bar {
 
 .drop-zone--active {
     border-color: #1ED760;
-    background: rgba(29, 185, 84, 0.06);
-    box-shadow: 0 0 0 1px #1db954, 0 0 32px rgba(29, 185, 84, 0.25);
+    background: rgba(30, 215, 96, 0.06);
+    box-shadow: 0 0 0 1px #1ED760, 0 0 32px rgba(30, 215, 96, 0.25);
 }
 
 .drop-zone--active p {
@@ -559,6 +560,12 @@ progress::-moz-progress-bar {
 
 .file-queue-item--enter {
     animation: fileItemEnter 0.25s ease-out;
+}
+
+.file-queue-item__select-label {
+    display: inline-flex;
+    align-items: center;
+    margin: 0;
 }
 
 .file-queue-item__name {
@@ -700,6 +707,11 @@ progress::-moz-progress-bar {
 
     h1 {
         font-size: 28px;
+    }
+
+    .logo {
+        width: 48px;
+        height: 48px;
     }
 
     .panel {
