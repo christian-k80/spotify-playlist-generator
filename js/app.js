@@ -39,6 +39,11 @@ const MAX_RATE_LIMIT_RETRIES = 8;
 // zu einer Playlist.
 const ADD_TRACKS_BATCH_SIZE = 100;
 
+// Bewusste kleine Pause zwischen den einzelnen Künstler-Anfragen
+// beim Genre-Abgleich im Export (siehe Kommentar dort) - senkt das
+// Risiko, Spotifys Kurzzeit-Rate-Limit zu treffen.
+const ARTIST_LOOKUP_DELAY_MS = 60;
+
 // Nach dieser Zeit ohne Antwort wird eine einzelne Anfrage abgebrochen.
 const FETCH_TIMEOUT_MS = 15000;
 
@@ -669,6 +674,17 @@ async function runPlaylistExport(playlistId, { onStatus, onProgress } = {}) {
 
         const artistId = uniqueArtistIds[i];
 
+        // Kleine Pause vor jeder Anfrage außer der ersten: ohne
+        // Batch-Endpunkt braucht ein Export mit vielen verschiedenen
+        // Künstlern schnell hintereinander viele Einzel-Anfragen -
+        // das kann Spotifys Kurzzeit-Rate-Limit auslösen, auch bei
+        // überschaubaren Playlists. Der kleine Abstand verteilt die
+        // Anfragen etwas und senkt das Risiko dafür spürbar, statt
+        // nur reaktiv über Retry-After abzuwarten.
+        if (i > 0) {
+            await new Promise(resolve => setTimeout(resolve, ARTIST_LOOKUP_DELAY_MS));
+        }
+
         const artistResponse = await fetchSpotifyApi(
             `https://api.spotify.com/v1/artists/${artistId}`,
             { method: "GET" },
@@ -885,7 +901,8 @@ async function loadMyPlaylists() {
                     id: item.id,
                     name: item.name || "Untitled playlist",
                     trackCount: item.items?.total ?? item.tracks?.total ?? null,
-                    status: "idle"
+                    status: "idle",
+                    selected: false
                 });
             }
 
@@ -955,10 +972,29 @@ function renderMyPlaylists() {
         }
 
         item.innerHTML = `
+            <label class="file-queue-item__select-label">
+                <input
+                    type="checkbox"
+                    class="file-queue-item__select"
+                    ${entry.selected ? "checked" : ""}
+                    ${entry.status === "creating" ? "disabled" : ""}
+                    aria-label="Select ${escapeHtml(entry.name)}"
+                >
+            </label>
             <span class="file-queue-item__name">${escapeHtml(entry.name)}</span>
             <span class="file-queue-item__status">${escapeHtml(statusText)}</span>
             ${progressHtml}
         `;
+
+        const selectCheckbox = item.querySelector(".file-queue-item__select");
+
+        if (selectCheckbox) {
+
+            selectCheckbox.addEventListener("change", (event) => {
+                entry.selected = event.target.checked;
+                renderMyPlaylists();
+            });
+        }
 
         if (entry.status !== "creating") {
 
@@ -1027,6 +1063,88 @@ function renderMyPlaylists() {
 
         listElement.appendChild(item);
     }
+
+    updatePlaylistSelectionControls();
+}
+
+
+// Synchronisiert den "Select all"-Schalter (inkl. unbestimmtem
+// Zustand, wenn nur ein Teil ausgewählt ist) und den
+// "Export selected"-Button mit dem aktuellen Auswahlstatus.
+function updatePlaylistSelectionControls() {
+
+    const selectAllCheckbox = document.getElementById("select-all-playlists-toggle");
+    const exportSelectedButton = document.getElementById("export-selected-playlists-button");
+
+    if (!selectAllCheckbox || !exportSelectedButton) {
+        return;
+    }
+
+    const selectableEntries = myPlaylists.filter(entry => entry.status !== "creating");
+    const selectedEntries = myPlaylists.filter(entry => entry.selected);
+
+    selectAllCheckbox.checked =
+        selectableEntries.length > 0 &&
+        selectedEntries.length === selectableEntries.length;
+
+    selectAllCheckbox.indeterminate =
+        selectedEntries.length > 0 &&
+        selectedEntries.length < selectableEntries.length;
+
+    exportSelectedButton.hidden = myPlaylists.length === 0;
+
+    exportSelectedButton.textContent = selectedEntries.length > 0 ?
+        `Export selected (${selectedEntries.length})` :
+        "Export selected";
+
+    exportSelectedButton.disabled =
+        isExportingSelectedPlaylists ||
+        selectedEntries.length === 0;
+}
+
+
+// Markiert beim Klick auf "Select all" alle (noch nicht laufenden)
+// Playlisten als ausgewählt bzw. hebt die Auswahl wieder auf.
+function toggleSelectAllPlaylists(checked) {
+
+    myPlaylists.forEach(entry => {
+        if (entry.status !== "creating") {
+            entry.selected = checked;
+        }
+    });
+
+    renderMyPlaylists();
+}
+
+
+// Exportiert alle aktuell ausgewählten Playlisten nacheinander
+// (verhindert per Flag ein doppeltes Anstoßen während der Export
+// bereits läuft).
+let isExportingSelectedPlaylists = false;
+
+async function exportSelectedPlaylists() {
+
+    if (isExportingSelectedPlaylists) {
+        return;
+    }
+
+    const selectedIds = myPlaylists
+        .filter(entry => entry.selected && entry.status !== "creating")
+        .map(entry => entry.id);
+
+    if (selectedIds.length === 0) {
+        return;
+    }
+
+    isExportingSelectedPlaylists = true;
+    renderMyPlaylists();
+
+    for (const playlistId of selectedIds) {
+        await exportMyPlaylist(playlistId);
+    }
+
+    isExportingSelectedPlaylists = false;
+    renderMyPlaylists();
 }
 
 
@@ -2052,6 +2170,19 @@ function addClickListener(elementId, handler) {
     element.addEventListener("click", handler);
 }
 
+
+function addChangeListener(elementId, handler) {
+
+    const element = document.getElementById(elementId);
+
+    if (!element) {
+        console.warn(`The element with id="${elementId}" was not found in the HTML.`);
+        return;
+    }
+
+    element.addEventListener("change", handler);
+}
+
 addClickListener("login-button", handleLoginButtonClick);
 addClickListener("validate-button", validateTracks);
 addClickListener("create-playlist-button", createPlaylist);
@@ -2059,6 +2190,8 @@ addClickListener("create-playlists-from-files-button", createPlaylistsFromFiles)
 addClickListener("clear-file-queue-button", clearFileQueue);
 addClickListener("export-playlist-button", exportPlaylist);
 addClickListener("load-playlists-button", loadMyPlaylists);
+addClickListener("export-selected-playlists-button", exportSelectedPlaylists);
+addChangeListener("select-all-playlists-toggle", (event) => toggleSelectAllPlaylists(event.target.checked));
 
 // --------------------------------------------------
 // Anwendung starten
