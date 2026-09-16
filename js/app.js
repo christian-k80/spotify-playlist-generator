@@ -28,7 +28,9 @@ const EXPORT_COLUMNS = [
     "Release Date",
     "Duration (ms)",
     "Explicit",
-    "Genres"
+    "Genres",
+    "ISRC",
+    "Album Cover URL"
 ];
 
 // Maximale Anzahl an Wiederholungsversuchen bei 429 (Rate Limit),
@@ -370,6 +372,7 @@ async function updateLoginStatus() {
 
     const status = document.getElementById("login-status");
     const button = document.getElementById("login-button");
+    const avatar = document.getElementById("profile-picture");
 
     const accessToken = await getValidAccessToken();
 
@@ -377,10 +380,19 @@ async function updateLoginStatus() {
 
         const profile = await fetchCurrentUserProfile();
         const displayName = profile?.display_name;
+        const avatarUrl = profile?.images?.[0]?.url;
 
         status.textContent = displayName ?
             `Connected as ${displayName}.` :
             "Connected. Let's go.";
+
+        if (avatarUrl) {
+            avatar.src = avatarUrl;
+            avatar.hidden = false;
+        } else {
+            avatar.hidden = true;
+            avatar.removeAttribute("src");
+        }
 
         button.textContent = "Disconnect";
         button.disabled = false;
@@ -389,6 +401,8 @@ async function updateLoginStatus() {
     } else {
 
         status.textContent = "Not connected yet.";
+        avatar.hidden = true;
+        avatar.removeAttribute("src");
         button.textContent = "Connect with Spotify";
         button.disabled = false;
         button.dataset.connected = "false";
@@ -584,8 +598,8 @@ async function runPlaylistExport(playlistId, { onStatus, onProgress } = {}) {
     const notifyStatus = (text) => { if (onStatus) onStatus(text); };
     const notifyProgress = (fraction) => { if (onProgress) onProgress(fraction); };
 
-    const notifyWaiting = (waitSeconds) => {
-        notifyStatus(`Spotify's hitting the brakes – waiting ${waitSeconds}s...`);
+    const notifyWaiting = (waitSeconds, attempt, reason) => {
+        notifyStatus(buildRateLimitMessage(waitSeconds, reason));
     };
 
     // ------------------------------------------
@@ -731,7 +745,9 @@ async function runPlaylistExport(playlistId, { onStatus, onProgress } = {}) {
             track.album?.release_date || "",
             track.duration_ms ?? "",
             track.explicit ? "true" : "false",
-            genres
+            genres,
+            track.external_ids?.isrc || "",
+            track.album?.images?.[0]?.url || ""
         ].map(sanitizeExportField);
 
         lines.push(row.join(";"));
@@ -751,8 +767,8 @@ async function loadPlaylistTracksList(playlistId, onStatus) {
 
     const notifyStatus = (text) => { if (onStatus) onStatus(text); };
 
-    const notifyWaiting = (waitSeconds) => {
-        notifyStatus(`Spotify's hitting the brakes – waiting ${waitSeconds}s...`);
+    const notifyWaiting = (waitSeconds, attempt, reason) => {
+        notifyStatus(buildRateLimitMessage(waitSeconds, reason));
     };
 
     const tracks = [];
@@ -878,8 +894,8 @@ async function loadMyPlaylists() {
             const response = await fetchSpotifyApi(
                 url,
                 { method: "GET" },
-                (waitSeconds) => {
-                    resultElement.textContent = `Spotify's hitting the brakes – waiting ${waitSeconds}s...`;
+                (waitSeconds, attempt, reason) => {
+                    resultElement.textContent = buildRateLimitMessage(waitSeconds, reason);
                 }
             );
 
@@ -1043,14 +1059,34 @@ function renderMyPlaylists() {
                     for (const track of entry.tracks) {
 
                         const trackItem = document.createElement("li");
+                        trackItem.className = "track-preview-item";
+
                         const artistNames = (track.artists || [])
                             .map(artist => artist.name)
                             .join(", ");
 
-                        trackItem.textContent = artistNames ?
+                        // Album-Bilder kommen "widest first" - das
+                        // letzte Element ist damit die kleinste
+                        // verfügbare Version, ideal als Thumbnail.
+                        const coverImages = track.album?.images || [];
+                        const thumbnailUrl = coverImages[coverImages.length - 1]?.url;
+
+                        if (thumbnailUrl) {
+
+                            const cover = document.createElement("img");
+                            cover.src = thumbnailUrl;
+                            cover.alt = "";
+                            cover.className = "track-preview-cover";
+
+                            trackItem.appendChild(cover);
+                        }
+
+                        const label = document.createElement("span");
+                        label.textContent = artistNames ?
                             `${track.name || "Unknown track"} — ${artistNames}` :
                             (track.name || "Unknown track");
 
+                        trackItem.appendChild(label);
                         trackList.appendChild(trackItem);
                     }
 
@@ -1322,6 +1358,17 @@ async function fetchWithTimeout(url, options = {}) {
 // Hilfsfunktion: Rate Limits
 // --------------------------------------------------
 
+// Baut die "Spotify bremst"-Meldung einheitlich zusammen, inklusive
+// des optionalen Grunds aus dem 429-Antwort-Body (z. B.
+// "QUOTA_EXCEEDED"), falls vorhanden.
+function buildRateLimitMessage(waitSeconds, reason) {
+
+    const reasonSuffix = reason ? ` (${reason})` : "";
+
+    return `Spotify's hitting the brakes${reasonSuffix} – waiting ${waitSeconds}s...`;
+}
+
+
 async function fetchWithRateLimitRetry(url, options, onWaiting) {
 
     let attempt = 0;
@@ -1351,8 +1398,23 @@ async function fetchWithRateLimitRetry(url, options, onWaiting) {
             backoffSeconds = Math.min(backoffSeconds * 2, 30);
         }
 
+        // Der 429-Antwort-Body enthält seit einiger Zeit ein
+        // "reason"-Feld (z. B. "QUOTA_EXCEEDED"), das erklärt,
+        // warum genau gebremst wird - nicht nur, wie lange. Diese
+        // Antwort wird sonst nirgendwo mehr gebraucht (wir werfen
+        // sie weg und versuchen es erneut), daher kann der Body
+        // hier gefahrlos gelesen werden.
+        let reason = null;
+
+        try {
+            const errorData = await response.json();
+            reason = errorData?.error?.reason || null;
+        } catch {
+            // Body war kein JSON oder leer - ohne Grund weitermachen.
+        }
+
         if (onWaiting) {
-            onWaiting(waitSeconds, attempt);
+            onWaiting(waitSeconds, attempt, reason);
         }
 
         await new Promise(resolve => setTimeout(resolve, waitSeconds * 1000));
@@ -1491,7 +1553,7 @@ async function createPlaylistFromTracks(playlistName, trackIds, isPublic, onStat
                 description: "Created with the Spotify Playlist Generator"
             })
         },
-        (waitSeconds) => notify(`Spotify's hitting the brakes – waiting ${waitSeconds}s...`)
+        (waitSeconds, attempt, reason) => notify(buildRateLimitMessage(waitSeconds, reason))
     );
 
     if (!playlistResponse.ok) {
@@ -1533,7 +1595,7 @@ async function createPlaylistFromTracks(playlistName, trackIds, isPublic, onStat
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ uris: batch })
             },
-            (waitSeconds) => notify(`Spotify's hitting the brakes – waiting ${waitSeconds}s...`)
+            (waitSeconds, attempt, reason) => notify(buildRateLimitMessage(waitSeconds, reason))
         );
 
         if (!tracksResponse.ok) {
@@ -1558,7 +1620,7 @@ async function createPlaylistFromTracks(playlistName, trackIds, isPublic, onStat
     const playlistDetailsResponse = await fetchSpotifyApi(
         `https://api.spotify.com/v1/playlists/${playlist.id}`,
         { method: "GET" },
-        (waitSeconds) => notify(`Spotify's hitting the brakes – waiting ${waitSeconds}s...`)
+        (waitSeconds, attempt, reason) => notify(buildRateLimitMessage(waitSeconds, reason))
     );
 
     if (playlistDetailsResponse.ok) {
