@@ -400,6 +400,14 @@ button:focus-visible {
     line-height: 1.6;
 }
 
+.profile-picture {
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 1px solid rgba(29, 185, 84, 0.35);
+}
+
 #login-status {
     color: #9a9aa0;
 }
@@ -674,6 +682,20 @@ progress::-moz-progress-bar {
 
 .track-preview-list li {
     padding: 2px 0;
+}
+
+.track-preview-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.track-preview-cover {
+    width: 32px;
+    height: 32px;
+    border-radius: 4px;
+    object-fit: cover;
+    flex-shrink: 0;
 }
 
 .file-queue-buttons {
