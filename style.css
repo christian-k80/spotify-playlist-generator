@@ -12,6 +12,22 @@ body {
     color: #f5f5f7;
     display: flex;
     flex-direction: column;
+    position: relative;
+}
+
+/* Sehr feine Rauschtextur über der gesamten Fläche - rein optisch,
+   nimmt keine Klicks entgegen und liegt inhaltlich "über" allem,
+   ohne etwas davon unbedienbar zu machen. Bricht die sonst komplett
+   flache schwarze Fläche dezent auf. */
+body::after {
+    content: "";
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 999;
+    opacity: 0.035;
+    mix-blend-mode: overlay;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
 }
 
 /* --------------------------------------------------
@@ -121,6 +137,42 @@ h2 {
 
 .panels::-webkit-scrollbar {
     display: none;
+}
+
+/* Schmale, ins Dark-Design passende Scrollbar für Bereiche, die
+   selbst vertikal scrollen (Panel-Inhalt, By-Hand-Card, Titel-
+   Vorschau) - ersetzt die sonst helle Standard-Scrollbar des
+   Betriebssystems. */
+.panel,
+.card--fill,
+.track-preview {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(29, 185, 84, 0.4) transparent;
+}
+
+.panel::-webkit-scrollbar,
+.card--fill::-webkit-scrollbar,
+.track-preview::-webkit-scrollbar {
+    width: 6px;
+}
+
+.panel::-webkit-scrollbar-track,
+.card--fill::-webkit-scrollbar-track,
+.track-preview::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.panel::-webkit-scrollbar-thumb,
+.card--fill::-webkit-scrollbar-thumb,
+.track-preview::-webkit-scrollbar-thumb {
+    background-color: rgba(29, 185, 84, 0.4);
+    border-radius: 999px;
+}
+
+.panel::-webkit-scrollbar-thumb:hover,
+.card--fill::-webkit-scrollbar-thumb:hover,
+.track-preview::-webkit-scrollbar-thumb:hover {
+    background-color: rgba(29, 185, 84, 0.65);
 }
 
 .panel {
@@ -256,6 +308,50 @@ h2 {
 
 .card--success-pulse {
     animation: cardPulse 0.9s ease-out;
+}
+
+/* Kurzer "Pop"-Effekt, wenn ein Status frisch auf "Fertig"/"Done"
+   wechselt - wird per JS nur beim ERSTEN Rendern dieses Zustands
+   gesetzt, damit die Animation nicht bei jedem Re-Render erneut
+   abspielt. */
+@keyframes checkPop {
+    0% {
+        transform: scale(0.5);
+        opacity: 0;
+    }
+    60% {
+        transform: scale(1.15);
+        opacity: 1;
+    }
+    100% {
+        transform: scale(1);
+        opacity: 1;
+    }
+}
+
+.status-pop {
+    display: inline-block;
+    animation: checkPop 0.35s ease-out;
+}
+
+/* Pulsierende Platzhalterzeilen, während z. B. die Playlist-Liste
+   noch lädt - wirkt weniger nach Stillstand als reiner Text. */
+@keyframes skeletonPulse {
+    0% {
+        background-position: 0% 50%;
+    }
+    100% {
+        background-position: 200% 50%;
+    }
+}
+
+.skeleton-item {
+    height: 44px;
+    border-radius: 10px;
+    margin-bottom: 8px;
+    background: linear-gradient(90deg, #141416 25%, #1e1e21 37%, #141416 63%);
+    background-size: 200% 100%;
+    animation: skeletonPulse 1.4s ease-in-out infinite;
 }
 
 /* Variante für Cards, deren Inhalt die volle Panel-Höhe ausnutzen
