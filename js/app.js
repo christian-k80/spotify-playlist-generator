@@ -168,6 +168,14 @@ async function loginWithSpotify() {
     authorizationUrl.searchParams.set("code_challenge_method", "S256");
     authorizationUrl.searchParams.set("code_challenge", codeChallenge);
 
+    // Erzwingt, dass Spotify den Login-/Freigabe-Dialog immer zeigt,
+    // statt eine im Browser bereits bestehende Sitzung automatisch
+    // wiederzuverwenden - so lässt sich bewusst ein anderes Konto
+    // wählen, statt versehentlich mit dem "falschen" verbunden zu
+    // bleiben (siehe das 403-Problem mit dem Developer-Dashboard-
+    // Nutzerlimit).
+    authorizationUrl.searchParams.set("show_dialog", "true");
+
     window.location.href = authorizationUrl.toString();
 }
 
@@ -870,6 +878,25 @@ async function exportPlaylist() {
 
 let myPlaylists = [];
 
+// Zeigt ein paar pulsierende Platzhalterzeilen, während die
+// Playlist-Liste noch lädt - wirkt weniger nach Stillstand als
+// reiner Text allein.
+function renderPlaylistSkeleton(count = 3) {
+
+    const listElement = document.getElementById("my-playlists-list");
+
+    listElement.innerHTML = "";
+
+    for (let i = 0; i < count; i++) {
+
+        const placeholder = document.createElement("li");
+        placeholder.className = "skeleton-item";
+
+        listElement.appendChild(placeholder);
+    }
+}
+
+
 async function loadMyPlaylists() {
 
     const loadButton = document.getElementById("load-playlists-button");
@@ -882,7 +909,7 @@ async function loadMyPlaylists() {
     loadButton.disabled = true;
     resultElement.textContent = "Loading your playlists...";
     myPlaylists = [];
-    renderMyPlaylists();
+    renderPlaylistSkeleton();
 
     try {
 
@@ -987,6 +1014,19 @@ function renderMyPlaylists() {
             statusText = `❌ ${entry.errorMessage || "Error"}`;
         }
 
+        // Der Pop-Effekt soll nur beim allerersten Rendern des
+        // "done"-Zustands abspielen, nicht bei jedem weiteren
+        // Re-Render (z. B. durch eine Checkbox-Änderung woanders).
+        const statusJustFinished = entry.status === "done" && !entry.donePopped;
+
+        if (statusJustFinished) {
+            entry.donePopped = true;
+        }
+
+        const statusClass = statusJustFinished ?
+            "file-queue-item__status status-pop" :
+            "file-queue-item__status";
+
         item.innerHTML = `
             <label class="file-queue-item__select-label">
                 <input
@@ -998,7 +1038,7 @@ function renderMyPlaylists() {
                 >
             </label>
             <span class="file-queue-item__name">${escapeHtml(entry.name)}</span>
-            <span class="file-queue-item__status">${escapeHtml(statusText)}</span>
+            <span class="${statusClass}">${escapeHtml(statusText)}</span>
             ${progressHtml}
         `;
 
@@ -1243,6 +1283,7 @@ async function exportMyPlaylist(playlistId) {
     entry.status = "creating";
     entry.progressText = "exporting...";
     entry.progressPercent = 0;
+    entry.donePopped = false;
     renderMyPlaylists();
 
     try {
@@ -1903,11 +1944,21 @@ function renderFileQueue(skippedCount = 0) {
             statusText = `❌ ${entry.errorMessage || "Error"}`;
         }
 
+        const statusJustFinished = entry.status === "done" && !entry.donePopped;
+
+        if (statusJustFinished) {
+            entry.donePopped = true;
+        }
+
+        const statusClass = statusJustFinished ?
+            "file-queue-item__status status-pop" :
+            "file-queue-item__status";
+
         item.innerHTML = `
             <span class="file-queue-item__name">
                 ${escapeHtml(entry.fileName)} → <strong>${escapeHtml(entry.playlistName)}</strong>
             </span>
-            <span class="file-queue-item__status">${escapeHtml(statusText)}</span>
+            <span class="${statusClass}">${escapeHtml(statusText)}</span>
             ${progressHtml}
         `;
 
