@@ -1069,6 +1069,13 @@ function renderMyPlaylists() {
             exportButton.addEventListener("click", () => exportMyPlaylist(entry.id));
 
             item.appendChild(exportButton);
+
+            const openLink = document.createElement("a");
+            openLink.href = `spotify:playlist:${entry.id}`;
+            openLink.textContent = "Open in Spotify";
+            openLink.className = "file-queue-item__link";
+
+            item.appendChild(openLink);
         }
 
         if (entry.expanded) {
@@ -1127,6 +1134,27 @@ function renderMyPlaylists() {
                             (track.name || "Unknown track");
 
                         trackItem.appendChild(label);
+
+                        if (track.uri) {
+
+                            const openTrackLink = document.createElement("a");
+                            openTrackLink.href = track.uri;
+                            openTrackLink.className = "track-preview-open";
+                            openTrackLink.setAttribute(
+                                "aria-label",
+                                `Open "${track.name || "track"}" in Spotify`
+                            );
+                            openTrackLink.innerHTML = `
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+                                    <path d="M15 3h6v6"></path>
+                                    <path d="M10 14L21 3"></path>
+                                </svg>
+                            `;
+
+                            trackItem.appendChild(openTrackLink);
+                        }
+
                         trackList.appendChild(trackItem);
                     }
 
@@ -1802,11 +1830,7 @@ function buildPlaylistResultHtml(playlist, requestedCount, actualTrackCount) {
         ${statusHtml}
 
         <p>
-            <a
-                href="${escapeHtml(playlist.external_urls.spotify)}"
-                target="_blank"
-                rel="noopener"
-            >
+            <a href="${escapeHtml(playlist.uri)}">
                 Open in Spotify
             </a>
         </p>
@@ -1987,8 +2011,6 @@ function renderFileQueue(skippedCount = 0) {
 
             const link = document.createElement("a");
             link.href = entry.playlistUrl;
-            link.target = "_blank";
-            link.rel = "noopener";
             link.textContent = "Open in Spotify";
             link.className = "file-queue-item__link";
 
@@ -2065,7 +2087,7 @@ async function createPlaylistsFromFiles() {
                 );
 
             entry.status = "done";
-            entry.playlistUrl = playlist.external_urls.spotify;
+            entry.playlistUrl = playlist.uri;
             entry.actualTrackCount = actualTrackCount;
             entry.requestedCount = requestedCount;
 
