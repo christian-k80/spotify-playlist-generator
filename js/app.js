@@ -807,7 +807,10 @@ async function loadPlaylistTracksList(playlistId, onStatus) {
             const trackData = item.item ?? item.track;
 
             if (trackData) {
-                tracks.push(trackData);
+                // added_at wird separat mitgeführt (nicht Teil des
+                // eigentlichen Track-Objekts), damit sich die Liste
+                // nachträglich nach Hinzufügedatum sortieren lässt.
+                tracks.push({ ...trackData, _addedAt: item.added_at || null });
             }
         }
 
@@ -1100,10 +1103,49 @@ function renderMyPlaylists() {
 
                 } else {
 
+                    const sortRow = document.createElement("label");
+                    sortRow.className = "track-preview-sort";
+                    sortRow.textContent = "Sort by ";
+
+                    const sortSelect = document.createElement("select");
+                    sortSelect.innerHTML = `
+                        <option value="default">Playlist order</option>
+                        <option value="added_desc">Date added (newest first)</option>
+                        <option value="added_asc">Date added (oldest first)</option>
+                    `;
+                    sortSelect.value = entry.tracksSortOrder || "default";
+
+                    sortSelect.addEventListener("change", (event) => {
+                        entry.tracksSortOrder = event.target.value;
+                        renderMyPlaylists();
+                    });
+
+                    sortRow.appendChild(sortSelect);
+                    preview.appendChild(sortRow);
+
+                    // Sortiert eine Kopie - die ursprüngliche
+                    // Ladereihenfolge in entry.tracks bleibt erhalten,
+                    // damit zwischen den Sortierungen hin- und
+                    // hergewechselt werden kann, ohne neu zu laden.
+                    let sortedTracks = entry.tracks;
+
+                    if (entry.tracksSortOrder === "added_desc") {
+
+                        sortedTracks = [...entry.tracks].sort(
+                            (a, b) => new Date(b._addedAt || 0) - new Date(a._addedAt || 0)
+                        );
+
+                    } else if (entry.tracksSortOrder === "added_asc") {
+
+                        sortedTracks = [...entry.tracks].sort(
+                            (a, b) => new Date(a._addedAt || 0) - new Date(b._addedAt || 0)
+                        );
+                    }
+
                     const trackList = document.createElement("ol");
                     trackList.className = "track-preview-list";
 
-                    for (const track of entry.tracks) {
+                    for (const track of sortedTracks) {
 
                         const trackItem = document.createElement("li");
                         trackItem.className = "track-preview-item";
