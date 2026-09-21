@@ -901,7 +901,9 @@ progress::-moz-progress-bar {
     }
 
     .file-queue-item__name,
-    .file-queue-item__status {
+    .file-queue-item__status,
+    .track-preview,
+    .file-queue-item__progress {
         width: 100%;
     }
 
